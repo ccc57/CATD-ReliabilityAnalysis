@@ -1,0 +1,245 @@
+---
+title: "RS_MDD_Reliability"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+library(terra)
+library(ggplot2)
+library(readr)
+library(mgc)
+library(psych)
+library(reshape2)
+library(ramify)
+library(lme4)
+```
+# Reliability Analysis
+### 57 MDD subjects with baseline and 1 year scan
+### Median age = 16.32; 30 females, 15 nonbinary/other
+### Resting state functional connectivity matrices extracted from BASC 122 atlas
+
+# ICC data
+```{r import-iccs, echo=FALSE}
+icc_dat <- read.csv('C:/Users/chris/OneDrive - Yale University/NIH/Jupyter notebooks/data/icc_z_dataframe.csv')
+
+iccs_mdd <- read.csv('./data/iccs_mdd.csv')
+measure_iccs <- read.csv('./data/measure_iccs.csv')
+
+dems <- read.csv('./data/subs_demographics.csv')
+icc_dems <- merge(dems, icc_dat, by.x = c("SDAN","session"), by.y = c("subject", "session"))
+has_oy <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2)
+
+iccs_mdd <- subset(iccs_mdd, type == "ICC2")
+iccs_mdd <- iccs_mdd %>% separate(col = measure, into = c("Region_1", "Region_2"))
+iccs_mdd$Region_1 <- as.integer(iccs_mdd$Region_1)
+iccs_mdd$Region_2 <- as.integer(iccs_mdd$Region_2)
+
+iccs_hv <- iccs_hv %>% separate(col = measure, into = c("Region_1", "Region_2"))
+iccs_hv$Region_1 <- as.integer(iccs_hv$Region_1)
+iccs_hv$Region_2 <- as.integer(iccs_hv$Region_2)
+```
+
+```{r icc-stats, echo=FALSE}
+summarise(iccs_mdd, Mean=mean(ICC), SD = sd(ICC), Lower_Bound = mean(lower.bound), Upper_Bound = mean(upper.bound), First_Quartile = quantile(ICC, .25), Third_Quartile = quantile(ICC, .75))
+```
+
+```{r plot-icc, echo = FALSE}
+gg1 <- ggplot(iccs_hv, aes(Region_1, Region_2, fill=ICC)) + geom_tile() + scale_fill_distiller(palette = "Blues", direction = 1, limit=c(0, 1))
+
+gg1 <- gg1 + scale_x_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11)) + scale_y_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11))+ggtitle("Edge-Level ICCs")
+
+theme_set(theme_minimal())
+gg1
+
+gg2 <- ggplot(iccs_hv, aes(Region_1, Region_2, fill=ICC)) + geom_tile() + scale_fill_distiller(palette = "Blues", direction = 1)
+
+gg2 <- gg2 + scale_x_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11)) + scale_y_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11))+ggtitle("Edge-Level ICCs", subtitle = "Colors normalized to max value")
+
+theme_set(theme_minimal())
+gg2
+
+```
+
+# Discriminability
+```{r discr, echo=FALSE}
+mdd <- has_oy %>% filter(Participant_Type2 == "MDD")
+mdd_dat <- mdd %>% ungroup() %>% select(c("X1_0": "X121_120"))
+mdd_subs <- mdd$SDAN
+
+discr_mdd <- discr.test.one_sample(mdd_dat, mdd_subs)
+print(paste0("Discriminability = ",discr_mdd$stat,", One Sample Test p = ", discr_mdd$p.value))
+
+# corr_dat <- subset(icc_dat, select = -c(subject, session))
+# subs <- icc_dat$subject
+# discr <- discr.test.one_sample(corr_dat, subs)
+```
+
+# Fingerprinting
+```{r FI, echo=FALSE}
+
+# ses1 <- as.matrix(has_oy %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v3", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+# ses2 <- as.matrix(has_oy %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+
+ses1 <- as.matrix(has_oy %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+ses2 <- as.matrix(has_oy %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+
+# write.table(ses1,'./ses1_mdd_v3_v4.csv',row.names=FALSE,col.names = FALSE, sep=",")
+# write.table(ses2,'./ses2_mdd_v4_v3.csv',row.names=FALSE,col.names=FALSE, sep=",")
+
+
+cor_mat <- matrix(0,nrow=dim(ses2)[1],ncol=dim(ses1)[1])
+for (i in 1:dim(ses2)[1]){
+  cor_mat[i,] <- apply(ses1, 1, function(x) {cor.test(x,ses2[i,],method = "p", exact=FALSE)$estimate})
+}
+
+ind <- cbind(1:dim(cor_mat)[1], argmax(cor_mat))
+FI <- length(ind[ind[,1] == ind[,2],1])/dim(ind)[1]
+
+
+null <- dpois(x=length(ind[ind[,1] == ind[,2],1]),lambda = 1)
+poisson <- poisson.test(c(1,length(ind[ind[,1] == ind[,2],1])),T=1, r=1, alternative = "t", conf.level = .95)
+
+print(paste0("Fingerprinting Index = ", FI, ", Poisson(1) Test p = ", poisson$p.value))
+
+
+plot_mtx <- function(Dx, main.title="Fingerprinting Matrix", xlab.title="Session 2", ylab.title="Session 1") {
+  data <- melt(Dx)
+  ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
+    geom_tile() + geom_point(data = data %>% filter(data$Var1 == ind[,1] & data$Var2 == ind[,2]), shape = 3, color = "yellow", size = .5) +
+    scale_fill_gradientn(name="r(ses1, ses2)",
+                         colours=c("#ffffff", "#3861A8"),
+                         limits=c(min(Dx), max(Dx))) +
+    xlab(xlab.title) +
+    ylab(ylab.title) +
+    theme_bw() +
+    ggtitle(main.title)
+}
+
+
+plot_mtx(cor_mat)
+
+
+cors_top <- cor_mat %>% melt() %>% filter(Var1 == ind[,1] & Var2 == ind[,2],)
+all_cors <- cor_mat %>% melt()
+plot(density(cors_top$value), main = "Correlation Size Distribution", col="#3861A8",lwd=2)
+lines(density(all_cors$value), col="#650D1B",lwd=2)
+legend("topleft", c("Differential Power","Group Consistency"), fill=c("#cc5050","#3861A8"))
+
+all_cors <- cor_mat %>% melt()
+plot(density(all_cors$value), main = "Correlation Size of All Cross-Session Correlations")
+
+
+```
+
+
+```{r discr-by-dem, echo=FALSE, eval=FALSE}
+
+#MDD (412) vs. HV (59)
+mdd <- has_oy %>% filter(Participant_Type2 == "MDD")
+mdd_dat <- mdd %>% ungroup() %>% select(c("X1_0": "X121_120"))
+mdd_subs <- mdd$SDAN
+
+hv <- has_oy %>% filter(Participant_Type2 == "HV")
+hv_dat <- hv %>% ungroup() %>% select(c("X1_0": "X121_120"))
+hv_subs <- hv$SDAN
+
+discr_mdd <- discr.test.one_sample(mdd_dat, mdd_subs)
+discr_hv <- discr.test.one_sample(hv_dat,hv_subs)
+
+#MDD: .77, HV: .74
+
+```
+
+```{r FI_by_dem, echo=FALSE,eval=FALSE}
+
+has_oy_mdd <- icc_dems %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2) %>% ungroup()
+
+has_oy_hv <- icc_dems %>% filter(Participant_Type2 == "HV") %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2) %>% ungroup()
+
+ses1_mdd <- as.matrix(has_oy_mdd %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+ses2_mdd <- as.matrix(has_oy_mdd %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+
+ses1_hv <- as.matrix(has_oy_hv %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+ses2_hv <- as.matrix(has_oy_hv %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
+
+cor_mat_mdd <- matrix(0,nrow=dim(ses2_mdd)[1],ncol=dim(ses1_mdd)[1])
+for (i in 1:dim(ses2_mdd)[1]){
+  cor_mat_mdd[i,] <- apply(ses1_mdd, 1, function(x) {cor.test(x,ses2_mdd[i,],method = "p", exact=FALSE)$estimate})
+}
+
+cor_mat_hv <- matrix(0,nrow=dim(ses2_hv)[1],ncol=dim(ses1_hv)[1])
+for (i in 1:dim(ses2_hv)[1]){
+  cor_mat_hv[i,] <- apply(ses1_hv, 1, function(x) {cor.test(x,ses2_hv[i,],method = "p", exact=FALSE)$estimate})
+}
+
+ind_mdd <- cbind(1:dim(cor_mat_mdd)[1], argmax(cor_mat_mdd))
+FI_mdd <- length(ind_mdd[ind_mdd[,1] == ind_mdd[,2],1])/dim(ind_mdd)[1]
+
+ind_hv <- cbind(1:dim(cor_mat_hv)[1], argmax(cor_mat_hv))
+FI_hv <- length(ind_hv[ind_hv[,1] == ind_hv[,2],1])/dim(ind_hv)[1]
+
+
+
+plot_mtx <- function(Dx,ind, main.title="Fingerprinting Distance Matrix", xlab.title="Session 2", ylab.title="Session 1") {
+  data <- melt(Dx)
+  ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
+    geom_tile() + geom_point(data = data %>% filter(data$Var1 == ind[,1] & data$Var2 == ind[,2]), shape = 3, color = "yellow", size = .5) +
+    scale_fill_gradientn(name="dist(x, y)",
+                         colours=c("#ffffff", "#3861A8"),
+                         limits=c(min(Dx), max(Dx))) +
+    xlab(xlab.title) +
+    ylab(ylab.title) +
+    theme_bw() +
+    ggtitle(main.title)
+}
+
+
+plot_mtx(cor_mat_mdd,ind_mdd)
+plot_mtx(cor_mat_hv,ind_hv)
+
+
+
+
+# null <- dpois(x=length(ind[ind[,1] == ind[,2],1]),lambda = 1)
+# poisson.test(c(1,length(ind[ind[,1] == ind[,2],1])),T=1, r=1, alternative = "t", conf.level = .95)
+
+
+has_oy %>% group_by(gender) %>% summarise((length(gender)/2))
+
+has_oy_mdd %>% group_by(gender) %>% summarise((length(gender)/2))
+
+c1 <- icc_dat[1,] %>% select(-c('subject','session'))
+```
+
+
+```{r bar-plots}
+# V2 V3 V4 V2-V3 V3-V4
+fi_1 <- c(0.472222222222222, 0.424242424242424, 0.508771929824561, 0.523809523809524, 0.560000000000000)
+fi_2 <- c(0.500000000000000, 0.454545454545455, 0.491228070175439, 0.603174603174603, 0.580000000000000)
+
+d <- data.frame(DB1=fi_1[3:5], DB2 = fi_2[3:5], name = c("t1-t2", "t2-t3", "t3-t4"))
+d <- melt(d)
+
+
+ggplot(d,aes(x=name,y=value,group=variable,color=variable))+geom_point()+stat_summary(fun.y=sum,geom="line") + ylim(0, 1) + xlab("Session") +
+    ylab("FI") +
+    theme_minimal() +
+    ggtitle("Fingerprinting Between Sessions (MDD subjects, n = 43)")
+
+
+d <- data.frame(Population = c("MDD","HV"), FI = c(.51, .57))
+ggplot(d,aes(x=Population,y=FI, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
+    ylab("FI (1 Year)") +
+    theme_bw() +
+    ggtitle("Fingerprinting Across Groups")
+
+d <- data.frame(Population = c("MDD","HV"), Discriminability = c(.77, .75))
+ggplot(d,aes(x=Population,y=Discriminability, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
+    ylab("Discriminability (1 Year)") +
+    theme_bw() +
+    ggtitle("Discriminability Across Groups")
+```

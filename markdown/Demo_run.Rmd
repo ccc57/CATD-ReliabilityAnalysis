@@ -1,0 +1,25 @@
+---
+title: "Demo_run"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+library(ggplot2)
+library(readr)
+
+
+measure_iccs <- read.csv('./measure_iccs.csv')
+icc2 <- subset(measure_iccs, type == "ICC2")
+icc2 <- icc2 %>% separate(col = measure, into = c("m1", "m2"))
+icc2$m1 <- as.integer(icc2$m1)
+icc2$m2 <- as.integer(icc2$m2)
+long_icc <- icc2[c("ICC", "m1", "m2")]
+# icc_mat <- matrix(0, nrow = length(unique(icc2$m1)), ncol = length(unique(icc2$m2)))
+# icc_mat[cbind(icc2$m1, icc2$m2)] <- icc2$ICC
+```

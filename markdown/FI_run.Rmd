@@ -1,0 +1,86 @@
+---
+title: "FI_run"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+library(psych)
+library(dplyr)
+library(mgc)
+library(reshape2)
+library(ggplot2)
+library(ramify)
+```
+
+```{r FI, echo=FALSE}
+icc_dat <- read.csv('C:/Users/chris/OneDrive - Yale University/NIH/Jupyter notebooks/data/icc_dataframe.csv')
+has_oy <- icc_dat %>% filter(grepl("v3|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2)
+
+ses1 <- as.matrix(has_oy %>% filter(grepl("v3", session)) %>% ungroup() %>% select(-c(1:2)))
+ses2 <- as.matrix(has_oy %>% filter(grepl("v4", session)) %>% ungroup() %>% select(-c(1:2)))
+
+
+
+cor_mat <- matrix(0,nrow=dim(ses2)[1],ncol=dim(ses1)[1])
+for (i in 1:dim(ses2)[1]){
+  cor_mat[i,] <- apply(ses1, 1, function(x) {cor.test(x,ses2[i,],method = "s", exact=FALSE)$estimate})
+}
+
+for (i in 1:dim(cor_mat)[1]) {
+  cor_mat[i,argmax(cor_mat)[i]] <- 2
+}
+
+ind <- cbind(1:dim(cor_mat)[1], argmax(cor_mat))
+FI <- length(ind[ind[,1] == ind[,2],1])/dim(ind)[1]
+
+
+null <- dpois(x=length(ind[ind[,1] == ind[,2],1]),lambda = 1)
+poisson.test(c(1,length(ind[ind[,1] == ind[,2],1])),T=1, r=1, alternative = "t", conf.level = .95)
+
+plot_mtx <- function(Dx, main.title="Distance Matrix", xlab.title="Session 2", ylab.title="Session 1") {
+  data <- melt(Dx)
+  ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
+    geom_tile() +
+    scale_fill_gradientn(name="dist(x, y)",
+                         colours=c("#ffffff", "#3861A8"),
+                         limits=c(min(Dx), max(Dx))) +
+    xlab(xlab.title) +
+    ylab(ylab.title) +
+    theme_bw() +
+    ggtitle(main.title)
+}
+
+
+plot_mtx(cor_mat)
+
+
+```
+```{r fi-plot}
+# V2 V3 V4 V2-V3 V3-V4
+fi_1 <- c(0.472222222222222, 0.424242424242424, 0.508771929824561, 0.523809523809524, 0.560000000000000)
+fi_2 <- c(0.500000000000000, 0.454545454545455, 0.491228070175439, 0.603174603174603, 0.580000000000000)
+
+d <- data.frame(DB1=fi_1[3:5], DB2 = fi_2[3:5], name = c("t1-t2", "t2-t3", "t3-t4"))
+d <- melt(d)
+
+
+ggplot(d,aes(x=name,y=value,group=variable,color=variable))+geom_point()+stat_summary(fun.y=sum,geom="line") + ylim(0, 1) + xlab("Session") +
+    ylab("FI") +
+    theme_minimal() +
+    ggtitle("Fingerprinting Between Sessions (MDD subjects, n = 43)")
+
+
+d <- data.frame(Population = c("MDD","HV"), FI = c(.51, .57))
+ggplot(d,aes(x=Population,y=FI, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
+    ylab("FI (1 Year)") +
+    theme_bw() +
+    ggtitle("Fingerprinting Across Groups")
+
+d <- data.frame(Population = c("MDD","HV"), Discriminability = c(.77, .75))
+ggplot(d,aes(x=Population,y=Discriminability, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
+    ylab("Discriminability (1 Year)") +
+    theme_bw() +
+    ggtitle("Discriminability Across Groups")
+```
