@@ -11,18 +11,25 @@ library(psych)
 library(svMisc)
 library(dplyr)
 library(lme4)
+library(readr)
 
 rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalysis/'
 source('./scripts/icc_run.R')
 ```
 
-```{r import, echo=FALSE}
+```{r icc, echo=FALSE}
 icc_dat <- read.csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe.csv'))
 
-has_oy <- icc_dat %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session))
+mdd <- icc_dat %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(Participant_Type2 == "MDD")
 
-test <- has_oy$subject[1:3]
-icc_out <- run_icc(icc_dat,test)
+hv <- icc_dat %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(Participant_Type2 == "HV")
+
+get_boot <- function(dat){
+  sublist <- dat$subject
+  set.seed(1)
+  bootlist <- sample(sublist, dim(sublist)[1], replace=T)
+  
+}
 
 ```
 
