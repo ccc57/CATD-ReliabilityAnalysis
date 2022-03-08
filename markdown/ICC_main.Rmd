@@ -18,8 +18,8 @@ source('./scripts/icc_run.R')
 ```
 
 ```{r icc, echo=FALSE}
-icc_dat <- read.csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe.csv'))
-icc_dems <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dems.csv'))
+icc_dat <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe.csv'))
+icc_dems <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dems.csv'), col_select = -c(1))
 
 icc_dems$subject <- icc_dems$SDAN
 
@@ -27,7 +27,10 @@ mdd <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% fi
 
 hv <- icc_dat %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(Participant_Type2 == "HV")
 
-test <- run_icc(icc_dat,sublist = mdd$subject[1:5], nboot = 2)
+psych_dat <- get_psych()
+mdd_iccs <- run_icc(icc_dat, sublist = mdd$subject, psych_dat = psych_dat, nboot = 10)
+write_csv(mdd_iccs, paste0(rootdir,'data/output/mdd_iccs_boot10.csv'))
+hv_iccs <- run_icc(icc_dat, sublist = hv$subject)
 
 ```
 
