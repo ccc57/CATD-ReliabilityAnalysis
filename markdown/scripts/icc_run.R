@@ -50,7 +50,7 @@ run_icc <- function(icc_dat,
     for (s in 1:nboot){
       psych_ss <- psych_dat[[i]]
       psych_ss <- psych_ss[match(bootlist[,s],psych_ss$subject),]
-      setTxtProgressBar(pb, i*s)
+      setTxtProgressBar(pb, ((i-1)*nboot) + s)
       Sys.sleep(.01)
       suppressMessages(icc <- ICC(psych_ss[,c("v1","v4")], missing=TRUE,alpha = alph/length(measure_cols))$results)
       icc$perm <- s

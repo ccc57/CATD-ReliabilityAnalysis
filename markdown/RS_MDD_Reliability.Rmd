@@ -1,245 +1,246 @@
 ---
-title: "RS_MDD_Reliability"
+title: "MDD_TRT_analyses"
+author: "Chris Camp"
+date: '2022-11-01'
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library(dplyr)
-library(tidyr)
-library(RColorBrewer)
-library(terra)
-library(ggplot2)
 library(readr)
-library(mgc)
-library(psych)
-library(reshape2)
 library(ramify)
-library(lme4)
-```
-# Reliability Analysis
-### 57 MDD subjects with baseline and 1 year scan
-### Median age = 16.32; 30 females, 15 nonbinary/other
-### Resting state functional connectivity matrices extracted from BASC 122 atlas
-
-# ICC data
-```{r import-iccs, echo=FALSE}
-icc_dat <- read.csv('C:/Users/chris/OneDrive - Yale University/NIH/Jupyter notebooks/data/icc_z_dataframe.csv')
-
-iccs_mdd <- read.csv('./data/iccs_mdd.csv')
-measure_iccs <- read.csv('./data/measure_iccs.csv')
-
-dems <- read.csv('./data/subs_demographics.csv')
-icc_dems <- merge(dems, icc_dat, by.x = c("SDAN","session"), by.y = c("subject", "session"))
-has_oy <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2)
-
-iccs_mdd <- subset(iccs_mdd, type == "ICC2")
-iccs_mdd <- iccs_mdd %>% separate(col = measure, into = c("Region_1", "Region_2"))
-iccs_mdd$Region_1 <- as.integer(iccs_mdd$Region_1)
-iccs_mdd$Region_2 <- as.integer(iccs_mdd$Region_2)
-
-iccs_hv <- iccs_hv %>% separate(col = measure, into = c("Region_1", "Region_2"))
-iccs_hv$Region_1 <- as.integer(iccs_hv$Region_1)
-iccs_hv$Region_2 <- as.integer(iccs_hv$Region_2)
+library(mgc)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyr)
+library(coin)
+library(reshape2)
+library(corrplot)
+library(Hmisc)
+library(psych)
 ```
 
-```{r icc-stats, echo=FALSE}
-summarise(iccs_mdd, Mean=mean(ICC), SD = sd(ICC), Lower_Bound = mean(lower.bound), Upper_Bound = mean(upper.bound), First_Quartile = quantile(ICC, .25), Third_Quartile = quantile(ICC, .75))
-```
+```{r load-data, include=FALSE, cache=TRUE}
+rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalysis/'
+all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
+all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe_v21_1.csv'), progress=TRUE)
+icc_summ <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
+mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
+hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
+mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
+mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
 
-```{r plot-icc, echo = FALSE}
-gg1 <- ggplot(iccs_hv, aes(Region_1, Region_2, fill=ICC)) + geom_tile() + scale_fill_distiller(palette = "Blues", direction = 1, limit=c(0, 1))
+nboot <- 1000
 
-gg1 <- gg1 + scale_x_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11)) + scale_y_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11))+ggtitle("Edge-Level ICCs")
-
-theme_set(theme_minimal())
-gg1
-
-gg2 <- ggplot(iccs_hv, aes(Region_1, Region_2, fill=ICC)) + geom_tile() + scale_fill_distiller(palette = "Blues", direction = 1)
-
-gg2 <- gg2 + scale_x_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11)) + scale_y_continuous(breaks=seq(0, 121, 11), labels = seq(0, 121, 11))+ggtitle("Edge-Level ICCs", subtitle = "Colors normalized to max value")
-
-theme_set(theme_minimal())
-gg2
-
-```
-
-# Discriminability
-```{r discr, echo=FALSE}
-mdd <- has_oy %>% filter(Participant_Type2 == "MDD")
-mdd_dat <- mdd %>% ungroup() %>% select(c("X1_0": "X121_120"))
-mdd_subs <- mdd$SDAN
-
-discr_mdd <- discr.test.one_sample(mdd_dat, mdd_subs)
-print(paste0("Discriminability = ",discr_mdd$stat,", One Sample Test p = ", discr_mdd$p.value))
-
-# corr_dat <- subset(icc_dat, select = -c(subject, session))
-# subs <- icc_dat$subject
-# discr <- discr.test.one_sample(corr_dat, subs)
-```
-
-# Fingerprinting
-```{r FI, echo=FALSE}
-
-# ses1 <- as.matrix(has_oy %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v3", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-# ses2 <- as.matrix(has_oy %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-
-ses1 <- as.matrix(has_oy %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-ses2 <- as.matrix(has_oy %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-
-# write.table(ses1,'./ses1_mdd_v3_v4.csv',row.names=FALSE,col.names = FALSE, sep=",")
-# write.table(ses2,'./ses2_mdd_v4_v3.csv',row.names=FALSE,col.names=FALSE, sep=",")
-
-
-cor_mat <- matrix(0,nrow=dim(ses2)[1],ncol=dim(ses1)[1])
-for (i in 1:dim(ses2)[1]){
-  cor_mat[i,] <- apply(ses1, 1, function(x) {cor.test(x,ses2[i,],method = "p", exact=FALSE)$estimate})
-}
-
-ind <- cbind(1:dim(cor_mat)[1], argmax(cor_mat))
-FI <- length(ind[ind[,1] == ind[,2],1])/dim(ind)[1]
-
-
-null <- dpois(x=length(ind[ind[,1] == ind[,2],1]),lambda = 1)
-poisson <- poisson.test(c(1,length(ind[ind[,1] == ind[,2],1])),T=1, r=1, alternative = "t", conf.level = .95)
-
-print(paste0("Fingerprinting Index = ", FI, ", Poisson(1) Test p = ", poisson$p.value))
-
-
-plot_mtx <- function(Dx, main.title="Fingerprinting Matrix", xlab.title="Session 2", ylab.title="Session 1") {
+plot_mtx <- function(Dx, main.title="Distance Matrix", xlab.title="Sample Sorted by Source", ylab.title="Sample Sorted by Source") {
   data <- melt(Dx)
   ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
-    geom_tile() + geom_point(data = data %>% filter(data$Var1 == ind[,1] & data$Var2 == ind[,2]), shape = 3, color = "yellow", size = .5) +
-    scale_fill_gradientn(name="r(ses1, ses2)",
-                         colours=c("#ffffff", "#3861A8"),
-                         limits=c(min(Dx), max(Dx))) +
-    xlab(xlab.title) +
-    ylab(ylab.title) +
-    theme_bw() +
-    ggtitle(main.title)
-}
-
-
-plot_mtx(cor_mat)
-
-
-cors_top <- cor_mat %>% melt() %>% filter(Var1 == ind[,1] & Var2 == ind[,2],)
-all_cors <- cor_mat %>% melt()
-plot(density(cors_top$value), main = "Correlation Size Distribution", col="#3861A8",lwd=2)
-lines(density(all_cors$value), col="#650D1B",lwd=2)
-legend("topleft", c("Differential Power","Group Consistency"), fill=c("#cc5050","#3861A8"))
-
-all_cors <- cor_mat %>% melt()
-plot(density(all_cors$value), main = "Correlation Size of All Cross-Session Correlations")
-
-
-```
-
-
-```{r discr-by-dem, echo=FALSE, eval=FALSE}
-
-#MDD (412) vs. HV (59)
-mdd <- has_oy %>% filter(Participant_Type2 == "MDD")
-mdd_dat <- mdd %>% ungroup() %>% select(c("X1_0": "X121_120"))
-mdd_subs <- mdd$SDAN
-
-hv <- has_oy %>% filter(Participant_Type2 == "HV")
-hv_dat <- hv %>% ungroup() %>% select(c("X1_0": "X121_120"))
-hv_subs <- hv$SDAN
-
-discr_mdd <- discr.test.one_sample(mdd_dat, mdd_subs)
-discr_hv <- discr.test.one_sample(hv_dat,hv_subs)
-
-#MDD: .77, HV: .74
-
-```
-
-```{r FI_by_dem, echo=FALSE,eval=FALSE}
-
-has_oy_mdd <- icc_dems %>% filter(Participant_Type2 == "MDD") %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2) %>% ungroup()
-
-has_oy_hv <- icc_dems %>% filter(Participant_Type2 == "HV") %>% filter(grepl("v1|v4", session)) %>% group_by(SDAN) %>% filter(length(session) == 2) %>% ungroup()
-
-ses1_mdd <- as.matrix(has_oy_mdd %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-ses2_mdd <- as.matrix(has_oy_mdd %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-
-ses1_hv <- as.matrix(has_oy_hv %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-ses2_hv <- as.matrix(has_oy_hv %>% filter(grepl("v4", session)) %>% ungroup() %>% select(c("X1_0": "X121_120")))
-
-cor_mat_mdd <- matrix(0,nrow=dim(ses2_mdd)[1],ncol=dim(ses1_mdd)[1])
-for (i in 1:dim(ses2_mdd)[1]){
-  cor_mat_mdd[i,] <- apply(ses1_mdd, 1, function(x) {cor.test(x,ses2_mdd[i,],method = "p", exact=FALSE)$estimate})
-}
-
-cor_mat_hv <- matrix(0,nrow=dim(ses2_hv)[1],ncol=dim(ses1_hv)[1])
-for (i in 1:dim(ses2_hv)[1]){
-  cor_mat_hv[i,] <- apply(ses1_hv, 1, function(x) {cor.test(x,ses2_hv[i,],method = "p", exact=FALSE)$estimate})
-}
-
-ind_mdd <- cbind(1:dim(cor_mat_mdd)[1], argmax(cor_mat_mdd))
-FI_mdd <- length(ind_mdd[ind_mdd[,1] == ind_mdd[,2],1])/dim(ind_mdd)[1]
-
-ind_hv <- cbind(1:dim(cor_mat_hv)[1], argmax(cor_mat_hv))
-FI_hv <- length(ind_hv[ind_hv[,1] == ind_hv[,2],1])/dim(ind_hv)[1]
-
-
-
-plot_mtx <- function(Dx,ind, main.title="Fingerprinting Distance Matrix", xlab.title="Session 2", ylab.title="Session 1") {
-  data <- melt(Dx)
-  ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
-    geom_tile() + geom_point(data = data %>% filter(data$Var1 == ind[,1] & data$Var2 == ind[,2]), shape = 3, color = "yellow", size = .5) +
+    geom_tile() +
     scale_fill_gradientn(name="dist(x, y)",
-                         colours=c("#ffffff", "#3861A8"),
+                         colours=c("#f2f0f7", "#cbc9e2", "#9e9ac8", "#6a51a3"),
                          limits=c(min(Dx), max(Dx))) +
     xlab(xlab.title) +
     ylab(ylab.title) +
     theme_bw() +
     ggtitle(main.title)
 }
+```
+
+```{r filtering, echo=FALSE, cache=TRUE}
+all_subs <- all_subs_unfiltered
+all_subs$session[grepl("v1",all_subs$session)] <- "v1"
+all_subs$session[grepl("v4",all_subs$session)] <- "v4"
+all_subs$session[grepl("v2",all_subs$session)] <- "v2"
+all_subs$session[grepl("v2",all_subs$session)] <- "v3"
 
 
-plot_mtx(cor_mat_mdd,ind_mdd)
-plot_mtx(cor_mat_hv,ind_hv)
+
+all_connectomes$session[grepl("v1",all_connectomes$session)] <- "v1"
+all_connectomes$session[grepl("v4",all_connectomes$session)] <- "v4"
+all_connectomes$session[grepl("v2",all_connectomes$session)] <- "v2"
+all_connectomes$session[grepl("v2",all_connectomes$session)] <- "v3"
+
+
+# all_subs <- all_subs %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
+all_subs <- all_subs %>% filter(grepl("v1|v3", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
+# all_subs <- all_subs %>% filter(grepl("i", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
+
+
+change_status <- all_subs %>% group_by(subject) %>% filter(length(unique(group)) > 1)
+for (i in unique(change_status$subject)){
+  all_subs[all_subs$subject == i,]$group <- "MDD"
+}
+
+# all_tomes <- all_connectomes %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+all_tomes <- all_connectomes %>% filter(grepl("v1|v3", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+# all_tomes <- all_connectomes %>% filter(grepl("i", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+
+mdd <- all_subs %>% filter(group == "MDD")
+hv <- all_subs %>% filter(group == "HV")
+
+mdd_tomes <- merge(mdd, all_tomes, by=c('subject','session'),all.x = TRUE)
+hv_tomes <- merge(hv, all_tomes, by=c('subject','session'),all.x = TRUE)
+
+
+all_subs_v1 <- filter(all_subs, grepl("v1",session))
+mdd_v1 <- filter(mdd, grepl("v1",session))
+hv_v1 <- filter(hv, grepl("v1",session))
+
+nsubs <- dim(all_subs_v1)[1]
+nsubs_mdd <- dim(mdd_v1)[1]
+nsubs_hv <- dim(hv_v1)[1]
+```
+
+Filtering from `r length(unique(all_subs_unfiltered$subject))` subjects with `r dim(all_connectomes)[1]` scans. `r length(unique(all_subs$subject))` subjects have baseline and 1 year timepoint scans. `r dim(mdd_v1)[1]` participants are depressed (including `r length(unique(change_status$subject))` participants who received a diagnosis between scans) and `r dim(hv_v1)[1]` are healthy volunteers (HVs). F/M for all participants: `r table(all_subs_v1$sex)`. F/M for MDD participants: `r table(mdd_v1$sex)`.
+
+```{r ICC, cache=TRUE}
+
+mdd_concat_iccs$group <- "MDD"
+hv_concat_iccs$group <- "HV"
+
+iccs_v2_mean <- mean(mdd_iccs_v2$ICC)
+iccs_v3_mean <- mean(mdd_iccs_v3$ICC)
+
+  
+all_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
+
+all_iccs_means <- all_iccs %>% group_by(measure, group) %>% summarise(ICC = mean(ICC))
+
+all_iccs_means_wide <- pivot_wider(all_iccs_means, names_from = group, values_from = ICC)
+all_iccs_means$group <- as.factor(all_iccs_means$group)
+
+all_iccs_by_measure <- pivot_wider(all_iccs, names_from = measure)
+
+icc_summ_means <- all_iccs_means %>% group_by(group) %>% summarise(mean_ICC = mean(ICC))
+
+icc_summ_all_means <- icc_summ %>% group_by(measure) %>% summarise(mean_ICC = mean(icc_mean)) %>% pivot_wider(names_from = measure,values_from = mean_ICC)
+all_mean <- mean(icc_summ$icc_mean)
+
+wilcox.test(hv_concat_iccs$ICC, mdd_concat_iccs$ICC, alternative = "two.sided")
+
+mdd_concat_iccs$contrasts <- mdd_concat_iccs$ICC - hv_concat_iccs$ICC
+icc_contrasts <- mdd_concat_iccs[order(mdd_concat_iccs$contrasts),]
+```
+
+``` {r fingerprinting, cache=TRUE}
+ses1_all <- as.matrix(all_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(-c(1:2)))
+ses2_all <- as.matrix(all_tomes %>% filter(grepl("v2", session)) %>% ungroup() %>% select(-c(1:2)))
+ses1_mdd <- as.matrix(mdd_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("1_0":"121_120")))
+ses2_mdd <- as.matrix(mdd_tomes %>% filter(grepl("v2", session)) %>% ungroup() %>% select(c("1_0":"121_120")))
+ses1_hv <- as.matrix(hv_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(c("1_0":"121_120")))
+ses2_hv <- as.matrix(hv_tomes %>% filter(grepl("v2", session)) %>% ungroup() %>% select(c("1_0":"121_120")))
+
+
+# write.table(ses1_all, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses1_all.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+# write.table(ses2_all, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses2_all.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+# write.table(ses1_mdd, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses1_mdd.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+# write.table(ses2_mdd, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses2_mdd.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+# write.table(ses1_hv, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses1_hv.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+# write.table(ses2_hv, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses2_hv.csv'), col.names=FALSE, row.names=FALSE,sep=',')
 
 
 
+get_FI <- function(ses1, ses2, continuous = FALSE, null = FALSE){
+  cor_mat1 <- matrix(0,nrow=dim(ses2)[1],ncol=dim(ses1)[1])
+  cor_mat2 <- matrix(0,nrow=dim(ses1)[1],ncol=dim(ses2)[1])
+  for (i in 1:dim(ses2)[1]){
+    cor_mat1[i,] <- apply(ses1, 1, function(x) {cor.test(x,ses2[i,],method = "s", exact=FALSE)$estimate})
+  }
+  for (i in 1:dim(ses1)[1]){
+    cor_mat2[i,] <- apply(ses2, 1, function(x) {cor.test(x,ses1[i,],method = "s", exact=FALSE)$estimate})
+  }
+  if (continuous == TRUE) {
+    within_corrs1 = diag(cor_mat1)
+    btwn_corrs1 = cor_mat1
+    diag(btwn_corrs1) = 0
+    btwn_corrs_avg1 = rowSums(btwn_corrs1) / (dim(btwn_corrs1)[2] - 1)
+    
+    within_corrs2 = diag(cor_mat2)
+    btwn_corrs2 = cor_mat2
+    diag(btwn_corrs2) = 0
+    btwn_corrs_avg2 = rowSums(btwn_corrs2) / (dim(btwn_corrs2)[2] - 1)
+    return(c(btwn_corrs_avg1,btwn_corrs_avg2))
+  }
+  else {
+    ind1 <- cbind(1:dim(cor_mat1)[1], argmax(cor_mat1))
+    ind2 <- cbind(1:dim(cor_mat2)[1], argmax(cor_mat2))
+    if (null) {
+      ind1[,1] <- sample(ind1[,1], length(ind1[,1]))
+      ind2[,1] <- sample(ind2[,1], length(ind2[,1]))
+      ind1[,2] <- sample(ind1[,2], length(ind1[,2]))
+      ind2[,2] <- sample(ind2[,2], length(ind2[,2]))
+    }
+    FI1 <- length(ind1[ind1[,1] == ind1[,2],1])/dim(ind1)[1]
+    FI2 <- length(ind2[ind2[,1] == ind2[,2],1])/dim(ind2)[1]
+    return(c(FI1,FI2))
+  }
+}
 
-# null <- dpois(x=length(ind[ind[,1] == ind[,2],1]),lambda = 1)
-# poisson.test(c(1,length(ind[ind[,1] == ind[,2],1])),T=1, r=1, alternative = "t", conf.level = .95)
+FI_all <- get_FI(ses1_all,ses2_all)
+FI_mdd <- get_FI(ses1_mdd,ses2_mdd)
+FI_hv <- get_FI(ses1_hv,ses2_hv)
 
+FI_all_null <- get_FI(ses1_all,ses2_all, null=TRUE)
+FI_mdd_null <- get_FI(ses1_mdd,ses2_mdd, null=TRUE)
+FI_hv_null <- get_FI(ses1_hv,ses2_hv, null=TRUE)
 
-has_oy %>% group_by(gender) %>% summarise((length(gender)/2))
+poisson.test(35, alternative = "two.sided")
 
-has_oy_mdd %>% group_by(gender) %>% summarise((length(gender)/2))
+FI_df <- data.frame(rbind(round(nsubs_mdd*mean(FI_mdd)),rbind(round(nsubs_hv*mean(FI_hv)))))
+colnames(FI_df) <- "matched"
+FI_df$unmatched <- rbind(nsubs_mdd - FI_df$matched[1], nsubs_hv - FI_df$matched[2])
+rownames(FI_df) <- c("mdd","hv")
 
-c1 <- icc_dat[1,] %>% select(-c('subject','session'))
+chi <- chisq.test(FI_df,correct=FALSE)
 ```
 
 
-```{r bar-plots}
-# V2 V3 V4 V2-V3 V3-V4
-fi_1 <- c(0.472222222222222, 0.424242424242424, 0.508771929824561, 0.523809523809524, 0.560000000000000)
-fi_2 <- c(0.500000000000000, 0.454545454545455, 0.491228070175439, 0.603174603174603, 0.580000000000000)
+```{r discr, cache=TRUE}
 
-d <- data.frame(DB1=fi_1[3:5], DB2 = fi_2[3:5], name = c("t1-t2", "t2-t3", "t3-t4"))
-d <- melt(d)
+corr_dat <- select(all_tomes, c("1_0":"121_120"))
+subs <- all_tomes$subject
+discr <- discr.test.one_sample(corr_dat, subs)
 
 
-ggplot(d,aes(x=name,y=value,group=variable,color=variable))+geom_point()+stat_summary(fun.y=sum,geom="line") + ylim(0, 1) + xlab("Session") +
-    ylab("FI") +
-    theme_minimal() +
-    ggtitle("Fingerprinting Between Sessions (MDD subjects, n = 43)")
+corr_dat <- select(mdd_tomes, c("1_0":"121_120"))
+subs <- mdd_tomes$subject
+discr_mdd <- discr.test.one_sample(corr_dat, subs)
 
 
-d <- data.frame(Population = c("MDD","HV"), FI = c(.51, .57))
-ggplot(d,aes(x=Population,y=FI, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
-    ylab("FI (1 Year)") +
-    theme_bw() +
-    ggtitle("Fingerprinting Across Groups")
+corr_dat <- select(hv_tomes, c("1_0":"121_120"))
+subs <- hv_tomes$subject
+discr_hv <- discr.test.one_sample(corr_dat, subs)
+```
 
-d <- data.frame(Population = c("MDD","HV"), Discriminability = c(.77, .75))
-ggplot(d,aes(x=Population,y=Discriminability, fill=Population))+geom_bar(stat="identity", width=0.5)+ylim(0, 1) + xlab("Diagnosis") +
-    ylab("Discriminability (1 Year)") +
-    theme_bw() +
-    ggtitle("Discriminability Across Groups")
+```{r figures}
+all_stats <- data.frame(cbind(rbind(mean(icc_summ_means$mean_ICC),icc_summ_means$mean_ICC[2],icc_summ_means$mean_ICC[1]),
+                              rbind(mean(FI_all),mean(FI_mdd),mean(FI_hv)), 
+                              rbind(mean(FI_all_null),mean(FI_mdd_null),mean(FI_hv_null)),
+                              rbind(discr$stat,discr_mdd$stat,discr_hv$stat),
+                              rbind(mean(discr$null),mean(discr_mdd$null),mean(discr_hv$null))),
+                        row.names = c('All','MDD','HV'))
+colnames(all_stats) <- c('ICC','FI','FI_null','Discr', 'Discr_null')
+all_stats$sig_pos <- all_stats$Discr + .1
+all_stats$sig_pos_fi <- all_stats$FI + .1
+
+
+ggplot(all_stats,aes(x=rownames(all_stats),y=ICC,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + ylim(0, 1) + xlab("Condition") +
+  ylab("Mean ICC") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") + 
+  theme_light() + theme(legend.position="none", text = element_text(size=20))
+
+ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + ylim(0, 1) + xlab("Condition") +
+  ylab("Fingerprinting Index") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") +
+  geom_segment(aes(x=(c(.75,1.75,2.75)),y=FI_null,xend=c(1.25,2.25,3.25),yend = FI_null), size = 1) +
+  geom_text(aes(x=rownames(all_stats),y=sig_pos_fi),size=8,label='***') + 
+  theme_light() + theme(legend.position="none", text = element_text(size=20))
+
+ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + ylim(0, 1) + xlab("Condition") +
+  ylab("Discriminability") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") +
+  geom_segment(aes(x=(c(.75,1.75,2.75)),y=Discr_null,xend=c(1.25,2.25,3.25),yend = Discr_null), size = 1) +
+  geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='**') + 
+  theme_light() + theme(legend.position="none", text = element_text(size=20)) + coord_flip()
+
+```
+
 ```
