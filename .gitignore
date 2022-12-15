@@ -5,3 +5,4 @@ markdown/.Renviron
 data/
 figures/
 references/
+.ipynb_checkpoints/
