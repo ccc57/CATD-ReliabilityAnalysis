@@ -37,6 +37,8 @@ clc;
 % reshape)
 
 
+all_se1_orig = readmatrix("./data/processed/connectivity_data/ses1_mdd.csv")';
+all_se2_orig = readmatrix("./data/processed/connectivity_data/ses2_mdd.csv")';
 
 
 % all_default_se1 is obtained from session 1
@@ -55,7 +57,8 @@ rate = zeros(N_iteration,2);
 
 no_sub = size(all_default_se1, 2);
 
-no_sub_to_randomize = round(0.8*no_sub); %pulling out 0.8 of subjs
+% no_sub_to_randomize = round(0.8*no_sub); %pulling out 0.8 of subjs
+no_sub_to_randomize = no_sub;
 
 tic
 for it = 1:N_iteration

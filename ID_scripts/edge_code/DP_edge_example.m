@@ -123,6 +123,11 @@ for i=1:length(th);
     clear mask;
 end
 
+
+%to flatten
+%  dp_upper = triu(edge_stat_matrix);
+%  flat_dp = dp_upper(dp_upper ~= 0);
+
 %from here, using the "Connectivity viewer" available here 
 % (https://bioimagesuiteweb.github.io/webapp/) allows visualization of
 % where the DP edges are located in the brain.

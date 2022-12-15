@@ -5,26 +5,29 @@ library(reshape2)
 library(ggplot2)
 
 rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalysis/'
-plot_mtx <- function(Dx, main.title="Distance Matrix", xlab.title="Sample Sorted by Source", ylab.title="Sample Sorted by Source") {
+plot_mtx <- function(Dx, xlab.title="Region", ylab.title="Region") {
   data <- melt(Dx)
   ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
     geom_tile() +
-    scale_fill_gradientn(name="dist(x, y)",
-                         colours=c("#f2f0f7", "#cbc9e2", "#9e9ac8", "#6a51a3"),
+    scale_fill_gradientn(name="ICC",
+                         colours=(c("white", "#d45757")),
                          limits=c(min(Dx), max(Dx))) +
     xlab(xlab.title) +
     ylab(ylab.title) +
-    theme_bw() +
-    ggtitle(main.title)
+    theme_bw() + theme(aspect.ratio=1) + scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0))
 }
 
-bs_iccs_all <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'), progress=TRUE)
+bs_iccs_all <- read_csv(paste0(rootdir,'data/output/bootstrapped1k_all_icc_means_v21_1.csv'), progress=TRUE)
 bs_iccs_all <- aggregate(bs_iccs_all[,1:5], by=list(bs_iccs_all$measure), FUN=mean)
 bs_iccs_all[c("measure")] <- list(NULL)
 bs_iccs_all <- bs_iccs_all %>% rename(measure = Group.1)
-bs_iccs_mdd <- read_csv(paste0(rootdir,'data/output/bootstrapped_mdd_icc_means_v21_1.csv'), progress=TRUE)
-bs_iccs_hv <- read_csv(paste0(rootdir,'data/output/bootstrapped_hv_icc_means_v21_1.csv'), progress=TRUE)
-
+bs_iccs_mdd <- read_csv(paste0(rootdir,'data/output/bootstrapped1k_mdd_icc_means_v21_1.csv'), progress=TRUE)
+bs_iccs_hv <- read_csv(paste0(rootdir,'data/output/bootstrapped1k_hv_icc_means_v21_1.csv'), progress=TRUE)
+mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
+mdd_iccs_v2$icc_mean <- mdd_iccs_v2$ICC
+mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
+mdd_iccs_v3$icc_mean <- mdd_iccs_v3$ICC
 
 ROI <- data.frame(do.call(rbind, strsplit(as.vector(bs_iccs_all$measure), split = "_")))
 names(ROI) <- c("ROI_1","ROI_2")
@@ -66,11 +69,29 @@ bs_iccs_hv <- rbind(bs_iccs_hv, diag)
 bs_iccs_hv <- bs_iccs_hv[order(bs_iccs_hv$ROI_1,bs_iccs_hv$ROI_2),]
 hv_mat <- matrix(data=bs_iccs_hv$icc_mean,nrow=max(ROI),ncol=max(ROI))
 
-contrast_mat <- mdd_mat - hv_mat
+mdd_iccs_v2 <- cbind(mdd_iccs_v2, ROI)
+flip$icc_mean <- mdd_iccs_v2$icc_mean
+mdd_iccs_v2 <- select(mdd_iccs_v2, c("icc_mean","ROI_1","ROI_2"))
+mdd_iccs_v2 <- rbind(mdd_iccs_v2, flip)
+mdd_iccs_v2 <- rbind(mdd_iccs_v2, diag)
+
+mdd_iccs_v2 <- mdd_iccs_v2[order(mdd_iccs_v2$ROI_1,mdd_iccs_v2$ROI_2),]
+v2_mat <- matrix(data=mdd_iccs_v2$icc_mean,nrow=max(ROI),ncol=max(ROI))
+
+mdd_iccs_v3 <- cbind(mdd_iccs_v3, ROI)
+flip$icc_mean <- mdd_iccs_v3$icc_mean
+mdd_iccs_v3 <- select(mdd_iccs_v3, c("icc_mean","ROI_1","ROI_2"))
+mdd_iccs_v3 <- rbind(mdd_iccs_v3, flip)
+mdd_iccs_v3 <- rbind(mdd_iccs_v3, diag)
+
+mdd_iccs_v3 <- mdd_iccs_v3[order(mdd_iccs_v3$ROI_1,mdd_iccs_v3$ROI_2),]
+v3_mat <- matrix(data=mdd_iccs_v3$icc_mean,nrow=max(ROI),ncol=max(ROI))
 
 plot_mtx(all_mat)
 plot_mtx(mdd_mat)
 plot_mtx(hv_mat)
+plot_mtx(v2_mat)
+plot_mtx(v3_mat)
 
 plot_mtx(contrast_mat)
 

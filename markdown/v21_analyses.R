@@ -73,14 +73,15 @@ table(hv_v1$sex)
 
 # ICC ---------------------------------------------------------------------
 
-mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
-hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
+mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped1k_mdd_iccs_v21_1.csv'))
+hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped1k_hv_iccs_v21_1.csv'))
+all_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped1k_all_iccs_v21_1.csv'))
 
 mdd_concat_iccs$group <- "MDD"
 hv_concat_iccs$group <- "HV"
-all_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
+# all_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
 
-all_iccs_means <- all_iccs %>% group_by(measure, group) %>% summarise(ICC = mean(ICC))
+all_iccs_means <- all_concat_iccs %>% group_by(measure, group) %>% summarise(ICC = mean(ICC))
 
 all_iccs_means_wide <- pivot_wider(all_iccs_means, names_from = group, values_from = ICC)
 all_iccs_means$group <- as.factor(all_iccs_means$group)

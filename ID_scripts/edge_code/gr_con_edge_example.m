@@ -28,8 +28,8 @@
 %%
 run_name = 'all';
 
-all_se1_orig = readmatrix(['./data_v21_1/ses1_',run_name,'.csv']).';
-all_se2_orig = readmatrix(['./data_v21_1/ses2_',run_name,'.csv']).';
+all_se1_orig = readmatrix(['./ID_scripts/edge_code/data_v21_1/ses1_',run_name,'.csv']).';
+all_se2_orig = readmatrix(['./ID_scripts/edge_code/data_v21_1/ses2_',run_name,'.csv']).';
 
 all_se1_org = ones(122, 122, size(all_se1_orig, 2));
 all_se2_org = ones(122, 122, size(all_se1_orig, 2));
@@ -115,6 +115,9 @@ for i=1:length(th);
     %dlmwrite(['./outs_v21_1/',filename, '_',run_name,'_',  num2str(th(i)),'.txt'], mask, ' ');
     clear mask;
 end
+
+%  gr_upper = triu(mean_group_con_edge_stat_matrix);
+%  flat_gr = gr_upper(gr_upper ~= 0)';
 
 %from here, using the "Connectivity viewer" available here 
 % (https://bioimagesuiteweb.github.io/webapp/) allows visualization of
