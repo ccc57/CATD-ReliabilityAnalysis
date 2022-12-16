@@ -2,7 +2,14 @@
 .RData
 .Rhistory
 markdown/.Renviron
-data/
+data/processed/connectomes/
+data/external/
 figures/
 references/
 .ipynb_checkpoints/
+deprecated/
+markdown/.Rhistory
+markdown/*.Rdata*
+markdown/RS_MDD_Reliability_cache/
+data/raw_hide/
+
