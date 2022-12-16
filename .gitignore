@@ -10,3 +10,5 @@ deprecated/
 markdown/.Rhistory
 markdown/*.Rdata*
 markdown/RS_MDD_Reliability_cache/
+data/raw_hide/
+.gitignore
