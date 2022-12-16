@@ -28,7 +28,7 @@ rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalys
 #Subject-level information
 all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
 #Vectorized connectivity matrices for each subject
-all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe_v21_1.csv'), progress=TRUE)
+all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectivity_data_v21_1.csv'), progress=TRUE)
 #ICC results from full sample
 all_concat_iccs <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
 #MDD ICC results
@@ -424,33 +424,38 @@ all_stats <- data.frame(cbind(rbind(all_mean,
                         row.names = c('All','MDD','HV'))
 colnames(all_stats) <- c('ICC','FI','FI_null','Discr',
                          'Discr_null','FI_lower','FI_upper','D_lower','D_upper')
-all_stats$sig_pos <- all_stats$Discr + .1
-all_stats$sig_pos_fi <- all_stats$FI + .15
+all_stats$Chance <- c("Chance Discriminability","Chance Discriminability","Chance Discriminability")
 
 #Figure 2A Fingerpinting Bar
 ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+
   geom_bar(stat="identity", width=0.5)  +
   geom_errorbar(aes(ymin=FI_lower, ymax=FI_upper, width=.2),
                  position=position_dodge(.9)) + 
-  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null), linetype="dashed",size=1) +
-  geom_text(aes(x=rownames(all_stats),y=sig_pos_fi),size=8,label='***') + 
+  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null), linetype="dashed",size=1) + 
   ylab("Fingerprinting Index")+ xlab("Condition") + 
   scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
-  theme_classic() + theme(legend.position="none", text = element_text(size=20)) + 
+  theme_classic() + theme(text = element_text(size=20)) + guides(linetype="test") +
   scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
 
 #Figure 2B Discriminability Bar
 ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+ 
-  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1))+
+  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1)) +
   scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) + 
   geom_errorbar(aes(ymin=D_lower, ymax=D_upper, width=.2),
                  position=position_dodge(.9)) + 
-  geom_segment(aes(x=c(.75,2.75,1.75),y=Discr_null,xend=c(1.25,3.25,2.25),yend = Discr_null), linetype="dashed",size=1) +
-  geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='***') + 
+  geom_segment(aes(x=c(.75,2.75,1.75),
+                   y=Discr_null,xend=c(1.25,3.25,2.25),
+                   yend = Discr_null,linetype=Chance),size=1) + 
+  scale_linetype_manual("Chance",values=c("Chance Discriminability"=2)) + 
+  guides(fill="none", linetype=guide_legend(title=NULL,keywidth = 3, keyheight = 1)) + 
   ylab("Discriminability")+ xlab("Condition") + 
   scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
-  theme_classic() + theme(legend.position="none", text = element_text(size=20))
+  theme_classic() + theme(legend.justification=c(1,1),legend.position=c(1,1),text = element_text(size=20))
 
+# Sig indicators on bar charts
+# all_stats$sig_pos <- all_stats$Discr + .1
+# all_stats$sig_pos_fi <- all_stats$FI + .15
+# geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='***')
 
 disc_violin_df <- data.frame(cbind(discr_all_boot,discr_hv_boot,discr_mdd_boot))
 disc_violin <- pivot_longer(disc_violin_df,
