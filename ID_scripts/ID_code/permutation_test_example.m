@@ -38,6 +38,8 @@ clc;
 % reshape)
 
 
+all_se1_orig = readmatrix("./ID_scripts/edge_code/data_v21_1/ses1_mdd.csv")';
+all_se2_orig = readmatrix("./ID_scripts/edge_code/data_v21_1/ses2_mdd.csv")';
 
 % all_default_se1 is obtained from session 1
 % all_default_se1 is M by N matrix, M is the number of edges in the whole connectivity matrix, N is the number of subjects

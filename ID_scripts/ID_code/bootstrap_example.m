@@ -37,8 +37,8 @@ clc;
 % reshape)
 
 
-all_se1_orig = readmatrix("./data/processed/connectivity_data/ses1_mdd.csv")';
-all_se2_orig = readmatrix("./data/processed/connectivity_data/ses2_mdd.csv")';
+all_se1_orig = readmatrix("./ID_scripts/edge_code/data_v21_1/ses1_all.csv")';
+all_se2_orig = readmatrix("./ID_scripts/edge_code/data_v21_1/ses2_all.csv")';
 
 
 % all_default_se1 is obtained from session 1
@@ -52,13 +52,12 @@ all_default_se1 = all_se1_orig;
 all_default_se2 = all_se2_orig;
 
 
-N_iteration = 1000; 
+N_iteration = 10; 
 rate = zeros(N_iteration,2);
 
 no_sub = size(all_default_se1, 2);
 
-% no_sub_to_randomize = round(0.8*no_sub); %pulling out 0.8 of subjs
-no_sub_to_randomize = no_sub;
+no_sub_to_randomize = no_sub; %pulling out 0.8 of subjs
 
 tic
 for it = 1:N_iteration
@@ -100,5 +99,5 @@ for it = 1:N_iteration
     
 end
 
-
+%dlmwrite('data/output/bootstrapped_FI_ALL.csv', mean(rate,2), ',');
  

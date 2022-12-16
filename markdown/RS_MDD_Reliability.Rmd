@@ -23,18 +23,26 @@ library(sjPlot)
 ```
 
 ```{r load-data, include=FALSE, cache=TRUE}
+#Set this to home directory
 rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalysis/'
+#Subject-level information
 all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
+#Vectorized connectivity matrices for each subject
 all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe_v21_1.csv'), progress=TRUE)
+#ICC results from full sample
 all_concat_iccs <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
+#MDD ICC results
 mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
+#HV ICC results
 hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
+#ICC results from baseline and 4month
 mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
+#Baseline and 8 month
 mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
+#Demographic information
 dm <- read_csv(paste0(rootdir,"references/rest_paths_no_dates_race.csv"))
 
-nboot <- 1000
-
+#Distance matrix plot, remove
 plot_mtx <- function(Dx, xlab.title="Region", ylab.title="Region") {
   data <- melt(Dx)
   ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
@@ -50,28 +58,25 @@ plot_mtx <- function(Dx, xlab.title="Region", ylab.title="Region") {
 ```
 
 ```{r filtering, echo=FALSE, cache=TRUE}
-all_subs <- all_subs_unfiltered
+all_subs <- merge(all_subs_unfiltered,
+                  dm[,c("subject","session","p_demo_screen_background_race")], 
+                  by=c("subject","session"),all.x=TRUE)
 
-all_subs <- merge(all_subs, dm[,c("subject","session","p_demo_screen_background_race")], by=c("subject","session"),all.x=TRUE)
-
+#Cleaning up session data
 all_subs$session[grepl("v1",all_subs$session)] <- "v1"
 all_subs$session[grepl("v4",all_subs$session)] <- "v4"
 all_subs$session[grepl("v2",all_subs$session)] <- "v2"
 all_subs$session[grepl("v3",all_subs$session)] <- "v3"
-
-
-
 all_connectomes$session[grepl("v1",all_connectomes$session)] <- "v1"
 all_connectomes$session[grepl("v4",all_connectomes$session)] <- "v4"
 all_connectomes$session[grepl("v2",all_connectomes$session)] <- "v2"
 all_connectomes$session[grepl("v3",all_connectomes$session)] <- "v3"
 
-
-all_subs_v2 <- all_subs %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup() %>% filter(group=="MDD")
+#Filter to subjects with baseline and 1y
+# all_subs_v2 <- all_subs %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup() %>% filter(group=="MDD")
 all_subs <- all_subs %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
-# all_subs <- all_subs %>% filter(grepl("i", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
 
-
+#Anyone who became an MDD at 1y is labeled MDD
 change_status <- all_subs %>% group_by(subject) %>% filter(length(unique(group)) > 1)
 for (i in unique(change_status$subject)){
   all_subs[all_subs$subject == i,]$group <- "MDD"
@@ -79,7 +84,6 @@ for (i in unique(change_status$subject)){
 
 all_tomes <- all_connectomes %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
 # all_tomes_v2 <- all_connectomes %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
-# all_tomes <- all_connectomes %>% filter(grepl("i", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
 
 mdd <- all_subs %>% filter(group == "MDD")
 hv <- all_subs %>% filter(group == "HV")
@@ -91,7 +95,7 @@ hv_tomes <- merge(hv, all_tomes, by=c('subject','session'),all.x = TRUE)
 all_subs_v1 <- filter(all_subs, grepl("v1",session))
 mdd_v1 <- filter(mdd, grepl("v1",session))
 hv_v1 <- filter(hv, grepl("v1",session))
-mdd_v2 <- filter(all_subs_v2, grepl("v1",session))
+# mdd_v2 <- filter(all_subs_v2, grepl("v1",session))
 
 nsubs <- dim(all_subs_v1)[1]
 nsubs_mdd <- dim(mdd_v1)[1]
@@ -160,13 +164,15 @@ FI_all <- get_FI(ses1_all,ses2_all)
 FI_mdd <- get_FI(ses1_mdd,ses2_mdd)
 FI_hv <- get_FI(ses1_hv,ses2_hv)
 
-#Passing null=TRUE gets null FI values
-FI_all_null <- get_FI(ses1_all,ses2_all, null=TRUE)
-FI_mdd_null <- get_FI(ses1_mdd,ses2_mdd, null=TRUE)
-FI_hv_null <- get_FI(ses1_hv,ses2_hv, null=TRUE)
+#Using permutation values from Horien et al. ID code with 1000 perms
+FI_all_null <- 0.0115
+FI_mdd_null <- 0.0174
+FI_hv_null <- 0.0314
 
 #Poisson test should be the same as testing null, use number of matches for first parameter
-poisson.test(35, alternative = "greater")
+poisson.test(floor(mean(FI_all)*nsubs), alternative = "greater")
+poisson.test(floor(mean(FI_mdd)*nsubs_mdd), alternative = "greater")
+poisson.test(floor(mean(FI_hv)*nsubs_hv), alternative = "greater")
 
 #For chi square
 FI_df <- data.frame(rbind(round(nsubs_mdd*mean(FI_mdd)),rbind(round(nsubs_hv*mean(FI_hv)))))
@@ -175,10 +181,42 @@ FI_df$unmatched <- rbind(nsubs_mdd - FI_df$matched[1], nsubs_hv - FI_df$matched[
 rownames(FI_df) <- c("mdd","hv")
 
 chi <- chisq.test(FI_df,correct=FALSE)
+
+#Data for bootstrapped fingerprinting values from Horien et al 2018
+bootstrapped_FI_MDD <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_MDD.csv"),col_names = "FI")
+bootstrapped_FI_HV <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_HV.csv"),col_names = "FI")
+bootstrapped_FI_ALL <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_ALL.csv"),col_names = "FI")
 ```
 
 
 ```{r discr, cache=TRUE}
+
+source(paste0(rootdir,"markdown/scripts/get_DiscrBoot.R"))
+
+
+discr_boot_f <- function(data,nboot){
+  pb <- txtProgressBar(min = 1, max = nboot, style = 3)
+  discr_bootlist <- 1:nboot
+  for(i in 1:nboot){
+    discr_boot <- get_DiscrBoot(all_tomes)
+    discr_bootlist[i] <- discr.stat(select(discr_boot,-c(1:2)), 
+                                    discr_boot$subject)$discr
+    setTxtProgressBar(pb, i)
+  }
+  close(pb)
+  return(discr_bootlist)
+}
+
+# discr_all_boot <- discr_boot_f(all_tomes,1000)
+# write.csv(discr_all_boot,paste0(rootdir,"data/output/discr_all_boot.csv"),row.names = FALSE)
+# discr_mdd_boot <- discr_boot_f(mdd_tomes,1000)
+# write.csv(discr_mdd_boot,paste0(rootdir,"data/output/discr_mdd_boot.csv"),row.names = FALSE)
+# discr_hv_boot <- discr_boot_f(hv_tomes,1000)
+# write.csv(discr_hv_boot,paste0(rootdir,"data/output/discr_hv_boot.csv"),row.names = FALSE)
+
+discr_all_boot <- read.csv(paste0(rootdir,"data/output/discr_all_boot.csv"))$x
+discr_mdd_boot <- read.csv(paste0(rootdir,"data/output/discr_mdd_boot.csv"))$x
+discr_hv_boot <- read.csv(paste0(rootdir,"data/output/discr_hv_boot.csv"))$x
 
 discr <- discr.test.one_sample(select(all_tomes, c("1_0":"121_120")), all_tomes$subject)
 
@@ -224,6 +262,7 @@ attr(effect_size_db$group_consistency, "label") <- "Group Consistency"
 attr(effect_size_db$differential_power, "label") <- "Differential Power"
 attr(effect_size_db$edge_discriminability, "label") <- "Edge Discriminability"
 
+#SI table 2
 tab_corr(effect_size_db, fade.ns=F,
   corr.method = "pearson",
   triangle = "l",
@@ -326,7 +365,7 @@ attr(all_subs_measures_df$delta_psychmeds, "label") <- "Meds-Psychoactive (chang
 attr(all_subs_measures_df$delta_othermeds, "label") <- "Meds-Other (change)"
 
 
-
+#SI table 3
 tab_corr(all_subs_measures_df, fade.ns=F,
   corr.method = "spearman",
   triangle = "l",
@@ -339,8 +378,8 @@ tab_corr(all_subs_measures_df, fade.ns=F,
   use.viewer = TRUE,
   file = paste0(rootdir,"figures/behavior_pearson_table.doc"))
 
-
-cormat <- rcorr(as.matrix(all_subs_measures_ranks,type="spearman"))
+#SI Figure 3
+cormat <- rcorr(as.matrix(all_subs_measures_df,type="spearman"))
 cormat_r <- cormat$r[c("within_var","FI_continuous","dist_rank"),
                      c("mean_mfq", "mean_shaps", "mean_ari1w", "mean_scared", 
                        "mean_motion", "mean_max_fd", "mean_age",  
@@ -361,28 +400,76 @@ corrplot(cormat_r,method="color")
 ```
 
 ```{r figures}
-all_stats <- data.frame(cbind(rbind(all_mean,mean(mdd_concat_iccs$ICC),mean(hv_concat_iccs$ICC)),
+all_stats <- data.frame(cbind(rbind(all_mean,
+                                    mean(mdd_concat_iccs$ICC),
+                                    mean(hv_concat_iccs$ICC)),
                               rbind(mean(FI_all),mean(FI_mdd),mean(FI_hv)), 
-                              rbind(mean(FI_all_null),mean(FI_mdd_null),mean(FI_hv_null)),
+                              rbind(FI_all_null,FI_mdd_null,FI_hv_null),
                               rbind(discr$stat,discr_mdd$stat,discr_hv$stat),
-                              rbind(mean(discr$null),mean(discr_mdd$null),mean(discr_hv$null))),
+                              rbind(mean(discr$null),
+                                    mean(discr_mdd$null),
+                                    mean(discr_hv$null)),                     
+                              rbind(quantile(bootstrapped_FI_ALL$FI,.05),
+                                    quantile(bootstrapped_FI_MDD$FI, .05), 
+                                    quantile(bootstrapped_FI_HV$FI, .05)),
+                              rbind(quantile(bootstrapped_FI_ALL$FI,.95),
+                                    quantile(bootstrapped_FI_MDD$FI, .95), 
+                                    quantile(bootstrapped_FI_HV$FI, .95)),
+                              rbind(quantile(discr_all_boot,.05),
+                                    quantile(discr_hv_boot, .05), 
+                                    quantile(discr_mdd_boot, .05)),
+                              rbind(quantile(discr_all_boot,.95),
+                                    quantile(discr_hv_boot, .95), 
+                                    quantile(discr_mdd_boot, .95))),
                         row.names = c('All','MDD','HV'))
-colnames(all_stats) <- c('ICC','FI','FI_null','Discr', 'Discr_null')
+colnames(all_stats) <- c('ICC','FI','FI_null','Discr',
+                         'Discr_null','FI_lower','FI_upper','D_lower','D_upper')
 all_stats$sig_pos <- all_stats$Discr + .1
-all_stats$sig_pos_fi <- all_stats$FI + .1
+all_stats$sig_pos_fi <- all_stats$FI + .15
 
-icc_fig_df <- data.frame(cbind(rbind(mean(mdd_concat_iccs$ICC),
-                                 mean(bootstrapped_icc_data$mdd_v2_icc_means), 
-                                 mean(hv_concat_iccs$ICC)),
-                           rbind(mdd_icc_quantiles[1], 
-                                 mdd_v2_icc_quantiles[1], 
-                                 hv_icc_quantiles[1]),
-                           rbind(mdd_icc_quantiles[2], 
-                                 mdd_v2_icc_quantiles[2], 
-                                 hv_icc_quantiles[2])),
-                     row.names = c('MDD - 1 Year','MDD - 4 Months','HV - 1 Year'))
-colnames(icc_df) <- c("ICC_mean", "ICC_05", "ICC_95")
+#Figure 2A Fingerpinting Bar
+ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+
+  geom_bar(stat="identity", width=0.5)  +
+  geom_errorbar(aes(ymin=FI_lower, ymax=FI_upper, width=.2),
+                 position=position_dodge(.9)) + 
+  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null), linetype="dashed",size=1) +
+  geom_text(aes(x=rownames(all_stats),y=sig_pos_fi),size=8,label='***') + 
+  ylab("Fingerprinting Index")+ xlab("Condition") + 
+  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
+  theme_classic() + theme(legend.position="none", text = element_text(size=20)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
 
+#Figure 2B Discriminability Bar
+ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+ 
+  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) + 
+  geom_errorbar(aes(ymin=D_lower, ymax=D_upper, width=.2),
+                 position=position_dodge(.9)) + 
+  geom_segment(aes(x=c(.75,2.75,1.75),y=Discr_null,xend=c(1.25,3.25,2.25),yend = Discr_null), linetype="dashed",size=1) +
+  geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='***') + 
+  ylab("Discriminability")+ xlab("Condition") + 
+  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
+  theme_classic() + theme(legend.position="none", text = element_text(size=20))
+
+
+disc_violin_df <- data.frame(cbind(discr_all_boot,discr_hv_boot,discr_mdd_boot))
+disc_violin <- pivot_longer(disc_violin_df,
+                            cols=c(1:3),names_to = "Condition",
+                            values_to = "Discr",names_pattern="discr_(.*)_boot")
+disc_violin[disc_violin == "mdd"] <- "MDD"
+disc_violin[disc_violin == "hv"] <- "HV"
+disc_violin[disc_violin == "all"] <- "All"
+
+ggplot(disc_violin, aes(x=Condition, y=Discr, fill=Condition)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width=0.1,fill="white",outlier.shape = NA) +
+  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") +
+  xlab("Condition") + ylab("Discriminability") +
+  theme_bw() + theme(legend.position="none", text = element_text(size=20)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(.5, 1.1))
+
+
+#SI Figure 1 df
 icc_df_for_violin <- pivot_longer(bootstrapped_icc_data,cols=c(1:3),names_to = "Condition",
                                   values_to = "ICC", names_pattern = "(.*)_icc_means")
 icc_df_for_violin[icc_df_for_violin == "mdd"] <- "MDD - 1 Year"
@@ -390,37 +477,10 @@ icc_df_for_violin[icc_df_for_violin == "hv"] <- "HV - 1 Year"
 icc_df_for_violin[icc_df_for_violin == "mdd_v2"] <- "MDD - 4 Months"
 
 
-ggplot(all_stats,aes(x=rownames(all_stats),y=ICC,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + ylim(0, 1) + xlab("Condition") +
-  ylab("Mean ICC") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") + theme_light() + theme(legend.position="none", text = element_text(size=20))
-
-ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + xlab("Condition") +
-  ylab("Fingerprinting Index") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") +
-  geom_segment(aes(x=(c(.75,1.75,2.75)),y=FI_null,xend=c(1.25,2.25,3.25),yend = FI_null), size = 1) +
-  geom_text(aes(x=rownames(all_stats),y=sig_pos_fi),size=8,label='***') + 
-  theme_classic() + theme(legend.position="none", text = element_text(size=20)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
-
-ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+geom_bar(stat="identity", width=0.5) + xlab("Condition") +
-  ylab("Discriminability") + scale_color_manual(values = c("#C96468", "#FECDAA","#2A2782"),aesthetics = "fill") +
-  geom_segment(aes(x=(c(.75,1.75,2.75)),y=Discr_null,xend=c(1.25,2.25,3.25),yend = Discr_null), size = 1) +
-  geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='**') + 
-  theme_classic() + theme(legend.position="none", text = element_text(size=20)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(.48, 1.1))
-
-
-ggplot(icc_df, aes(x=rownames(icc_df), y=ICC_mean, fill=rownames(icc_df))) + 
-  geom_bar(stat="identity",width=0.5, color="black", 
-           position=position_dodge()) +
-  geom_errorbar(aes(ymin=ICC_05, ymax=ICC_95, width=.2),
-                 position=position_dodge(.9)) + 
-  xlab("Condition") + ylab("Mean ICC") +
-  theme_classic() + theme(legend.position="none", text = element_text(size=20)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
-
 ggplot(icc_df_for_violin, aes(x=Condition, y=ICC, fill=Condition)) + 
   geom_violin(trim = FALSE) + 
   geom_boxplot(width=0.1,fill="white",outlier.shape = NA) +
-  scale_color_manual(values = c("#DFA4A6", "#829DEE","#FFDA85"),aesthetics = "fill") +
+  scale_color_manual(values = c("#FECDAA", "#CACBE4","#6785E3"),aesthetics = "fill") +
   xlab("Condition") + ylab("Mean ICC") +
   theme_bw() + theme(legend.position="none", text = element_text(size=20)) + 
   scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
