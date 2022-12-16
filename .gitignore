@@ -2,7 +2,8 @@
 .RData
 .Rhistory
 markdown/.Renviron
-data/
+data/processed/connectomes/
+data/external/
 figures/
 references/
 deprecated/
