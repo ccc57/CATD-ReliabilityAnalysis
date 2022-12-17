@@ -1,26 +1,36 @@
+# title: "Test-retest reliability of functional connectivity in depressed adolescents"
+# author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+# date: '2022-12-17'
+
+#Adjust run_name, MDD filter, and sublist depending on the analysis
+#Run slurm command file using HPC
+
+
 rootdir <- '/home/ccc98/Documents/ReliabilityAnalysis/'
 run_name <- 'mdd_v2_icc_boot' #CHANGE
 
 library(readr)
 library(dplyr)
 
-icc_dat <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe_v21_1.csv'))
-icc_dems <- read_csv(paste0(rootdir,'references/rest_df_v21_1_light.csv'), progress = TRUE)
+icc_dat <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectivity_data_v21_1.csv'))
+icc_dems <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
 
-# Changing MDD filter to v3 for v3 analysis
-# mdd <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(group == "MDD")
-mdd <- icc_dems %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(group == "MDD")
+# Change MDD filter for timepoint analysis
+mdd <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(group == "MDD")
+# mdd <- icc_dems %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(group == "MDD")
 hv <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup() %>% filter(group == "HV")
 all <- icc_dems %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(grepl("v1", session)) %>% ungroup()
 
 
 sublist <- mdd$subject #CHANGE
+# sublist <- all$subject 
+# sublist <- hv$subject 
 nboot <- 1000
 set.seed(1)
 bootlist <- replicate(nboot, sample(sublist, length(sublist), replace=T))
 bootlist[,1] <- sublist
 colnames(bootlist) <- sprintf("n%05d", seq(0, 99999))[1:dim(bootlist)[2]]
-write_csv(data.frame(bootlist), paste0(rootdir,'references/bootlist_mdd_v2.csv')) #CHANGE
+write_csv(data.frame(bootlist), paste0(rootdir,'references/bootlist_',run_name,nboot,'.csv'))
 
 
 

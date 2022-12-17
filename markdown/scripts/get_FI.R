@@ -1,3 +1,8 @@
+# title: "Test-retest reliability of functional connectivity in depressed adolescents"
+# author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+# date: '2022-12-17'
+
+
 # -------------------get_FI---------------------------
 # Generates fingerprinting index for any two sessions
 # Inputs: 
@@ -9,7 +14,7 @@
 #                   
 # Outputs:
 #                   If continuous is FALSE, returns FI of ses1-ses2 and ses2-ses1 (or null). Take the mean of these for FI.
-
+# Called by RS_MDD_Reliability.Rmd
 
 get_FI <- function(ses1, ses2, continuous = FALSE, null = FALSE){
   cor_mat1 <- matrix(0,nrow=dim(ses2)[1],ncol=dim(ses1)[1])

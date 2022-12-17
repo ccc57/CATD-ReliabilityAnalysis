@@ -1,3 +1,9 @@
+# title: "Test-retest reliability of functional connectivity in depressed adolescents"
+# author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+# date: '2022-12-17'
+# Converts ICCs to ICC connectomes
+
+
 library(readr)
 library(dplyr)
 library(stats)

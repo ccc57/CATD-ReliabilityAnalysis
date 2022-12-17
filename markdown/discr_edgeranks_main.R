@@ -1,10 +1,16 @@
+# title: "Test-retest reliability of functional connectivity in depressed adolescents"
+# author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+# date: '2022-12-17'
+
+#Creates slurm commands for edge discriminability
+
 library(tidyr)
 library(readr)
 library(foreach)
 library(doParallel)
 
 rootdir <- '/home/ccc98/Documents/ReliabilityAnalysis/'
-all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/icc_dataframe_v21_1.csv'), progress=TRUE)
+all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectivity_data_v21_1.csv'), progress=TRUE)
 
 all_connectomes$session[grepl("v1",all_connectomes$session)] <- "v1"
 all_connectomes$session[grepl("v4",all_connectomes$session)] <- "v4"

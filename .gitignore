@@ -12,3 +12,7 @@ markdown/*.Rdata*
 markdown/RS_MDD_Reliability_cache/
 data/raw_hide/
 .gitignore
+.Rproj.user
+ReliabilityAnalysis.Rproj
+renv/
+.Rprofile

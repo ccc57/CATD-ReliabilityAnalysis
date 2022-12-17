@@ -1,7 +1,7 @@
 ---
-title: "MDD_TRT_analyses"
-author: "Chris Camp"
-date: '2022-11-01'
+title: "Test-retest reliability of functional connectivity in depressed adolescents"
+author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+date: '2022-12-17'
 output: html_document
 ---
 
@@ -207,16 +207,18 @@ discr_boot_f <- function(data,nboot){
   return(discr_bootlist)
 }
 
-# discr_all_boot <- discr_boot_f(all_tomes,1000)
-# write.csv(discr_all_boot,paste0(rootdir,"data/output/discr_all_boot.csv"),row.names = FALSE)
-# discr_mdd_boot <- discr_boot_f(mdd_tomes,1000)
-# write.csv(discr_mdd_boot,paste0(rootdir,"data/output/discr_mdd_boot.csv"),row.names = FALSE)
-# discr_hv_boot <- discr_boot_f(hv_tomes,1000)
-# write.csv(discr_hv_boot,paste0(rootdir,"data/output/discr_hv_boot.csv"),row.names = FALSE)
+#Comment these after the first time to avoid rerunning
+discr_all_boot <- discr_boot_f(all_tomes,1000)
+write.csv(discr_all_boot,paste0(rootdir,"data/output/discr_all_boot.csv"),row.names = FALSE)
+discr_mdd_boot <- discr_boot_f(mdd_tomes,1000)
+write.csv(discr_mdd_boot,paste0(rootdir,"data/output/discr_mdd_boot.csv"),row.names = FALSE)
+discr_hv_boot <- discr_boot_f(hv_tomes,1000)
+write.csv(discr_hv_boot,paste0(rootdir,"data/output/discr_hv_boot.csv"),row.names = FALSE)
 
-discr_all_boot <- read.csv(paste0(rootdir,"data/output/discr_all_boot.csv"))$x
-discr_mdd_boot <- read.csv(paste0(rootdir,"data/output/discr_mdd_boot.csv"))$x
-discr_hv_boot <- read.csv(paste0(rootdir,"data/output/discr_hv_boot.csv"))$x
+#Uncomment these after the first time to avoid rerunning
+# discr_all_boot <- read.csv(paste0(rootdir,"data/output/discr_all_boot.csv"))$x
+# discr_mdd_boot <- read.csv(paste0(rootdir,"data/output/discr_mdd_boot.csv"))$x
+# discr_hv_boot <- read.csv(paste0(rootdir,"data/output/discr_hv_boot.csv"))$x
 
 discr <- discr.test.one_sample(select(all_tomes, c("1_0":"121_120")), all_tomes$subject)
 
@@ -424,54 +426,40 @@ all_stats <- data.frame(cbind(rbind(all_mean,
                         row.names = c('All','MDD','HV'))
 colnames(all_stats) <- c('ICC','FI','FI_null','Discr',
                          'Discr_null','FI_lower','FI_upper','D_lower','D_upper')
-all_stats$Chance <- c("Chance Discriminability","Chance Discriminability","Chance Discriminability")
+all_stats$Chance_d <- c("Chance Discriminability","Chance Discriminability","Chance Discriminability")
+all_stats$Chance_fi <- c("Chance Fingerprinting","Chance Fingerprinting","Chance Fingerprinting")
 
 #Figure 2A Fingerpinting Bar
 ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+
   geom_bar(stat="identity", width=0.5)  +
   geom_errorbar(aes(ymin=FI_lower, ymax=FI_upper, width=.2),
                  position=position_dodge(.9)) + 
-  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null), linetype="dashed",size=1) + 
+  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null, linetype=Chance_fi),size=1) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) + 
+  scale_linetype_manual("Chance",values=c("Chance Fingerprinting"=2)) +
+  guides(fill="none", linetype=guide_legend(title=NULL,keywidth = 3, keyheight = 1)) + 
   ylab("Fingerprinting Index")+ xlab("Condition") + 
   scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
-  theme_classic() + theme(text = element_text(size=20)) + guides(linetype="test") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
+  theme_classic() + theme(text = element_text(size=20)) + 
+  theme(legend.justification=c(1,1),legend.position=c(1,1),
+        text = element_text(size=20))
 
 #Figure 2B Discriminability Bar
 ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+ 
-  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) + 
+  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1.05)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) + 
   geom_errorbar(aes(ymin=D_lower, ymax=D_upper, width=.2),
                  position=position_dodge(.9)) + 
   geom_segment(aes(x=c(.75,2.75,1.75),
                    y=Discr_null,xend=c(1.25,3.25,2.25),
-                   yend = Discr_null,linetype=Chance),size=1) + 
+                   yend = Discr_null,linetype=Chance_d),size=1) + 
   scale_linetype_manual("Chance",values=c("Chance Discriminability"=2)) + 
   guides(fill="none", linetype=guide_legend(title=NULL,keywidth = 3, keyheight = 1)) + 
   ylab("Discriminability")+ xlab("Condition") + 
   scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
-  theme_classic() + theme(legend.justification=c(1,1),legend.position=c(1,1),text = element_text(size=20))
-
-# Sig indicators on bar charts
-# all_stats$sig_pos <- all_stats$Discr + .1
-# all_stats$sig_pos_fi <- all_stats$FI + .15
-# geom_text(aes(x=rownames(all_stats),y=sig_pos),size=8,label='***')
-
-disc_violin_df <- data.frame(cbind(discr_all_boot,discr_hv_boot,discr_mdd_boot))
-disc_violin <- pivot_longer(disc_violin_df,
-                            cols=c(1:3),names_to = "Condition",
-                            values_to = "Discr",names_pattern="discr_(.*)_boot")
-disc_violin[disc_violin == "mdd"] <- "MDD"
-disc_violin[disc_violin == "hv"] <- "HV"
-disc_violin[disc_violin == "all"] <- "All"
-
-ggplot(disc_violin, aes(x=Condition, y=Discr, fill=Condition)) +
-  geom_violin(trim = FALSE) +
-  geom_boxplot(width=0.1,fill="white",outlier.shape = NA) +
-  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") +
-  xlab("Condition") + ylab("Discriminability") +
-  theme_bw() + theme(legend.position="none", text = element_text(size=20)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(.5, 1.1))
+  theme_classic() + 
+  theme(legend.justification=c(1,1),legend.position=c(1,1),
+        text = element_text(size=20))
 
 
 #SI Figure 1 df
@@ -493,6 +481,5 @@ ggplot(icc_df_for_violin, aes(x=Condition, y=ICC, fill=Condition)) +
 ```
 
 ```{r demographics}
-dm <- read_csv(paste0(rootdir,"references/rest_paths_no_dates_race.csv"))
 sub_dm <- merge(all_subs, dm[,c("subject","session","p_demo_screen_background_race")], by=c("subject","session"),all.x=TRUE)
 ```

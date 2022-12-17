@@ -1,9 +1,15 @@
+# title: "Test-retest reliability of functional connectivity in depressed adolescents"
+# author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+# date: '2022-12-17'
+
+# Some additional analyses for comparing across 4 month timepoints
+
+
 library(dplyr)
 library(readr)
 library(ramify)
 library(mgc)
 library(ggplot2)
-library(Hotelling)
 
 rootdir <- '/home/ccc98/Documents/ReliabilityAnalysis/'
 all_subs <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
@@ -86,7 +92,6 @@ write_csv(hv_icc_summ, paste0(rootdir,"data/output/bootstrapped1k_hv_icc_means_v
 
 
 
-ht <- hotelling.test(as.matrix(mdd_icc_summ$icc_mean),as.matrix(hv_icc_summ$icc_mean))
 # fingerprinting ----------------------------------------------------------
 
 ses1_all <- as.matrix(all_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(-c(1:2)))
