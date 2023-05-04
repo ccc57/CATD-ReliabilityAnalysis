@@ -23,38 +23,35 @@ library(sjPlot)
 ```
 
 ```{r load-data, include=FALSE, cache=TRUE}
+
 #Set this to home directory
-rootdir <- 'C:/Users/chris/OneDrive - Yale University/Projects/ReliabilityAnalysis/'
+rootdir <- '~/Documents/CATD-ReliabilityAnalysis/'
 #Subject-level information
-all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df_v21_1.csv'), progress = TRUE)
+all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df.csv'), progress = TRUE)
 #Vectorized connectivity matrices for each subject
-all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectivity_data_v21_1.csv'), progress=TRUE)
-#ICC results from full sample
-all_concat_iccs <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
-#MDD ICC results
-mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
-#HV ICC results
-hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
-#ICC results from baseline and 4month
-mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
-#Baseline and 8 month
-mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
-#Demographic information
+schaefersc_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectome_dataframe_schaefersc.csv'), progress=TRUE)
+
+basc_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectome_dataframe_basc.csv'), progress=TRUE)
+
+tanner <- read_csv(paste0(rootdir, 'references/tanner.csv'))
+
+# #ICC results from full sample
+# all_concat_iccs <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
+# #MDD ICC results
+# mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
+# #HV ICC results
+# hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
+# #ICC results from baseline and 4month
+# mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
+# #Baseline and 8 month
+# mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
+
+# #Demographic information
 dm <- read_csv(paste0(rootdir,"references/rest_paths_no_dates_race.csv"))
 
-#Distance matrix plot, remove
-plot_mtx <- function(Dx, xlab.title="Region", ylab.title="Region") {
-  data <- melt(Dx)
-  ggplot(data, aes(x=Var1, y=Var2, fill=value)) +
-    geom_tile() +
-    scale_fill_gradientn(name="ICC",
-                         colours=(c("white", "#d45757")),
-                         limits=c(min(Dx), max(Dx))) +
-    xlab(xlab.title) +
-    ylab(ylab.title) +
-    theme_bw() + theme(aspect.ratio=1) + scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0))
-}
+source(paste0(rootdir, "markdown/scripts/plots.R"))
+
+
 ```
 
 ```{r filtering, echo=FALSE, cache=TRUE}
@@ -67,14 +64,16 @@ all_subs$session[grepl("v1",all_subs$session)] <- "v1"
 all_subs$session[grepl("v4",all_subs$session)] <- "v4"
 all_subs$session[grepl("v2",all_subs$session)] <- "v2"
 all_subs$session[grepl("v3",all_subs$session)] <- "v3"
-all_connectomes$session[grepl("v1",all_connectomes$session)] <- "v1"
-all_connectomes$session[grepl("v4",all_connectomes$session)] <- "v4"
-all_connectomes$session[grepl("v2",all_connectomes$session)] <- "v2"
-all_connectomes$session[grepl("v3",all_connectomes$session)] <- "v3"
+schaefersc_connectomes$session[grepl("v1",schaefersc_connectomes$session)] <- "v1"
+schaefersc_connectomes$session[grepl("v4",schaefersc_connectomes$session)] <- "v4"
+schaefersc_connectomes$session[grepl("v2",schaefersc_connectomes$session)] <- "v2"
+schaefersc_connectomes$session[grepl("v3",schaefersc_connectomes$session)] <- "v3"
 
 #Filter to subjects with baseline and 1y
 # all_subs_v2 <- all_subs %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup() %>% filter(group=="MDD")
 all_subs <- all_subs %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) > 1) %>% ungroup()
+
+all_subs <- merge(all_subs, tanner, by.x = c("subject","session"), by.y = c("SDAN", "Task_Visit_Type"), all.x = T)
 
 #Anyone who became an MDD at 1y is labeled MDD
 change_status <- all_subs %>% group_by(subject) %>% filter(length(unique(group)) > 1)
@@ -82,7 +81,7 @@ for (i in unique(change_status$subject)){
   all_subs[all_subs$subject == i,]$group <- "MDD"
 }
 
-all_tomes <- all_connectomes %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+all_tomes <- schaefersc_connectomes %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
 # all_tomes_v2 <- all_connectomes %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
 
 mdd <- all_subs %>% filter(group == "MDD")
@@ -107,36 +106,61 @@ edgenames <- colnames(select(all_tomes, -c(1:2)))
 Filtering from `r length(unique(all_subs_unfiltered$subject))` subjects with `r dim(all_connectomes)[1]` scans. `r length(unique(all_subs$subject))` subjects have baseline and 1 year timepoint scans. `r dim(mdd_v1)[1]` participants are depressed (including `r length(unique(change_status$subject))` participants who received a diagnosis between scans) and `r dim(hv_v1)[1]` are healthy volunteers (HVs). F/M for all participants: `r table(all_subs_v1$sex)`. F/M for MDD participants: `r table(mdd_v1$sex)`.
 
 ```{r ICC, cache=TRUE}
-#Assign group labels
-mdd_concat_iccs$group <- "MDD"
-hv_concat_iccs$group <- "HV"
 
-iccs_v2_mean <- mean(mdd_iccs_v2$ICC)
-iccs_v3_mean <- mean(mdd_iccs_v3$ICC)
+icc.data.mdd.sc <- read_csv(paste0(rootdir, "data/output/mdd_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
+icc.data.hv.sc <- read_csv(paste0(rootdir, "data/output/hv_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
+icc.data.all.sc <- read_csv(paste0(rootdir, "data/output/all_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
 
-#Combine mdd and hv ICCs
-group_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
+ICC.21.mdd.sc <- icc.data.mdd.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
 
-group_iccs_means <- group_iccs %>% group_by(measure, group) %>% dplyr::summarise(ICC = mean(ICC))
+ICC.21.hv.sc <- icc.data.hv.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
 
-group_iccs_means_wide <- pivot_wider(group_iccs_means, names_from = group, values_from = ICC)
-group_iccs_means$group <- as.factor(group_iccs_means$group)
+ICC.21.all.sc <- icc.data.all.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
 
-#Get ICCs by edge
-group_iccs_by_measure <- pivot_wider(group_iccs, names_from = measure)
 
-#ICCs run with all subjects
-icc_summ_all_means <- all_concat_iccs %>% group_by(measure) %>% dplyr::summarise(mean_ICC = mean(icc_mean)) %>% pivot_wider(names_from = measure,values_from = mean_ICC)
-all_mean <- mean(all_concat_iccs$icc_mean)
 
-mdd_concat_iccs$contrasts <- mdd_concat_iccs$ICC - hv_concat_iccs$ICC
-icc_contrasts <- mdd_concat_iccs[order(mdd_concat_iccs$contrasts),]
 
-#Data for confidence intervals, this probably makes the above code unnecessary
-bootstrapped_icc_data <- read_csv(paste0(rootdir,"data/output/bootstrapped_icc_data.csv"))
-mdd_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_icc_means, c(.05, .95))
-hv_icc_quantiles <- quantile(bootstrapped_icc_data$hv_icc_means, c(.05, .95))
-mdd_v2_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_v2_icc_means, c(.05, .95))
+
+### Not used
+# #Assign group labels
+# mdd_concat_iccs$group <- "MDD"
+# hv_concat_iccs$group <- "HV"
+# 
+# iccs_v2_mean <- mean(mdd_iccs_v2$ICC)
+# iccs_v3_mean <- mean(mdd_iccs_v3$ICC)
+# 
+# #Combine mdd and hv ICCs
+# group_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
+# 
+# group_iccs_means <- group_iccs %>% group_by(measure, group) %>% dplyr::summarise(ICC = mean(ICC))
+# 
+# group_iccs_means_wide <- pivot_wider(group_iccs_means, names_from = group, values_from = ICC)
+# group_iccs_means$group <- as.factor(group_iccs_means$group)
+# 
+# #Get ICCs by edge
+# group_iccs_by_measure <- pivot_wider(group_iccs, names_from = measure)
+# 
+# #ICCs run with all subjects
+# icc_summ_all_means <- all_concat_iccs %>% group_by(measure) %>% dplyr::summarise(mean_ICC = mean(icc_mean)) %>% pivot_wider(names_from = measure,values_from = mean_ICC)
+# all_mean <- mean(all_concat_iccs$icc_mean)
+# 
+# mdd_concat_iccs$contrasts <- mdd_concat_iccs$ICC - hv_concat_iccs$ICC
+# icc_contrasts <- mdd_concat_iccs[order(mdd_concat_iccs$contrasts),]
+# 
+# #Data for confidence intervals, this probably makes the above code unnecessary
+# bootstrapped_icc_data <- read_csv(paste0(rootdir,"data/output/bootstrapped_icc_data.csv"))
+# mdd_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_icc_means, c(.05, .95))
+# hv_icc_quantiles <- quantile(bootstrapped_icc_data$hv_icc_means, c(.05, .95))
+# mdd_v2_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_v2_icc_means, c(.05, .95))
 
 ```
 
@@ -158,11 +182,13 @@ ses2_hv <- as.matrix(hv_tomes %>% filter(grepl("v4", session)) %>% ungroup() %>%
 # write.table(ses2_hv, paste0(rootdir,'ID_scripts/edge_code/data_v21_1/ses2_hv.csv'), col.names=FALSE, row.names=FALSE,sep=',')
 
 #Fingerprinting function
-source(paste0(rootdir,'markdown/scripts/get_FI.R'))
-
 FI_all <- get_FI(ses1_all,ses2_all)
 FI_mdd <- get_FI(ses1_mdd,ses2_mdd)
 FI_hv <- get_FI(ses1_hv,ses2_hv)
+
+
+source(paste0(rootdir,'markdown/scripts/get_FI.R'))
+
 
 #Using permutation values from Horien et al. ID code with 1000 perms
 FI_all_null <- 0.0115
@@ -215,7 +241,7 @@ write.csv(discr_mdd_boot,paste0(rootdir,"data/output/discr_mdd_boot.csv"),row.na
 discr_hv_boot <- discr_boot_f(hv_tomes,1000)
 write.csv(discr_hv_boot,paste0(rootdir,"data/output/discr_hv_boot.csv"),row.names = FALSE)
 
-#Uncomment these after the first time to avoid rerunning
+#Uncomment these after the first time to load bootstrapped discriminability
 # discr_all_boot <- read.csv(paste0(rootdir,"data/output/discr_all_boot.csv"))$x
 # discr_mdd_boot <- read.csv(paste0(rootdir,"data/output/discr_mdd_boot.csv"))$x
 # discr_hv_boot <- read.csv(paste0(rootdir,"data/output/discr_hv_boot.csv"))$x
@@ -316,36 +342,43 @@ all_subs_measures <- all_subs %>%
          mean_age = mean(age),
          mean_psychmeds = mean(psych_meds),
          mean_othermeds = mean(other),
+         mean_tannergrowth = mean(s_tanner_growth),
+         mean_tannerpubic = mean(s_tanner_pubic),
          delta_mfq = s_mfq_tot - lag(s_mfq_tot, default = first(s_mfq_tot)),
          delta_shaps = s_shaps_tot - lag(s_shaps_tot, default = first(s_shaps_tot)),
          delta_ari1w = s_ari1w_tot - lag(s_ari1w_tot, default = first(s_ari1w_tot)),
          delta_scared = s_scared_tot - lag(s_scared_tot, default = first(s_scared_tot)),
          delta_psychmeds = psych_meds - lag(psych_meds, default = first(psych_meds)),
-         delta_othermeds = abs(other - lag(other, default = first(other)))) %>% 
+         delta_othermeds = abs(other - lag(other, default = first(other))),
+         delta_tannergrowth = 
+           abs(s_tanner_growth - lag(s_tanner_growth, default = first(s_tanner_growth))),
+         delta_tannerpubic = 
+           abs(s_tanner_pubic - lag(s_tanner_pubic, default = first(s_tanner_pubic)))) %>% 
   filter(session == "v4")
 
 
-# ICC
+# ICC - within subject variance
 within_var_mat <- matrix(mapply(function(x,y) sd(c(x,y)),ses1_all, ses2_all), ncol=ncol(ses1_all))
 all_subs_measures$within_var <- apply(within_var_mat, 1, mean)
 
 
 # Fingerprinting
-FI_continuous_all <- zeros(nrow = dim(ses1_all)[1], ncol = 2)
-FI_continuous_all[,1:2] <- get_FI(ses1_all,ses2_all,continuous=TRUE)
-all_subs_measures$FI_continuous <- rowMeans(FI_continuous_all)
+all_subs_measures$FI_continuous <- get_FI(ses1_all, ses2_all, continuous = T) 
 
 #Subject discriminability
 source(paste0(rootdir,'markdown/scripts/get_dist_ranklist.R'))
-all_subs_measures$dist_rank <- get_dist_ranklist(select(all_tomes, -c(1:2)), "subject")
+all_subs_measures$dist_rank <- get_dist_ranklist(select(all_tomes, -c(1:2)))
+all_subs_measures$dist_rank <- 1:dim(all_subs_measures)[1]
 
 all_subs_measures_df <- all_subs_measures[c("within_var","FI_continuous","dist_rank",
                                             "mean_mfq", "mean_shaps", "mean_ari1w", 
                                             "mean_scared", "mean_motion", "mean_max_fd", 
-                                            "mean_age", "mean_psychmeds","mean_othermeds", 
+                                            "mean_age", "mean_psychmeds","mean_othermeds",
+                                            "mean_tannergrowth", "mean_tannerpubic",
                                             "delta_mfq", "delta_shaps", "delta_ari1w", 
                                             "delta_scared", "delta_psychmeds", 
-                                            "delta_othermeds")]
+                                            "delta_othermeds", "delta_tannergrowth", 
+                                            "delta_tannerpubic")]
 
 attr(all_subs_measures_df$within_var, "label") <- "Within-Subject Variance"
 attr(all_subs_measures_df$FI_continuous, "label") <- "Fingerprinting"

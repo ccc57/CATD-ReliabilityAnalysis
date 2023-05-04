@@ -9,6 +9,7 @@ library(readr)
 library(foreach)
 library(doParallel)
 
+
 rootdir <- '/home/ccc98/Documents/ReliabilityAnalysis/'
 all_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectivity_data_v21_1.csv'), progress=TRUE)
 
