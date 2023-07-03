@@ -1,0 +1,15 @@
+.git/
+*.Rproj*
+data/processed/
+data/raw/
+data/raw_hide/
+*.RData*
+*.Rprofile*
+references/
+figures/
+deprecated/
+renv/
+markdown/*.Renviron*
+markdown/*.Rdata*
+markdown/RS_MDD_Reliability_cache/
+drafts/
