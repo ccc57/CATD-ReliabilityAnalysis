@@ -1,0 +1,535 @@
+---
+title: "Test-retest reliability of functional connectivity in depressed adolescents"
+author: "Chris C. Camp, Stephanie Noble, Dustin Scheinost, Argyris Stringaris, and Dylan M. Nielson"
+date: '2022-12-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(readr)
+library(mgc)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyr)
+library(coin)
+library(reshape2)
+library(corrplot)
+library(Hmisc)
+library(psych)
+library(sjPlot)
+```
+
+```{r load-data, include=FALSE, cache=TRUE}
+
+#Set this to home directory
+rootdir <- '~/project/CATD-ReliabilityAnalysis/'
+#Subject-level information
+all_subs_unfiltered <- read_csv(paste0(rootdir,'references/rest_df.csv'), progress = TRUE)
+#Vectorized connectivity matrices for each subject
+schaefersc_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectome_dataframe_schaefersc.csv'), progress=TRUE)
+
+basc_connectomes <- read_csv(paste0(rootdir,'data/processed/connectivity_data/connectome_dataframe_basc.csv'), progress=TRUE)
+
+tanner <- read_csv(paste0(rootdir, 'references/tanner.csv'))
+
+# #ICC results from full sample
+# all_concat_iccs <- read_csv(paste0(rootdir,'data/output/bootstrapped_all_icc_means_v21_1.csv'))
+# #MDD ICC results
+# mdd_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_mdd_iccs_v21_1.csv'))
+# #HV ICC results
+# hv_concat_iccs <-read_csv(paste0(rootdir, 'data/output/bootstrapped_hv_iccs_v21_1.csv'))
+# #ICC results from baseline and 4month
+# mdd_iccs_v2 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v2.csv'))
+# #Baseline and 8 month
+# mdd_iccs_v3 <- read_csv(paste0(rootdir, 'data/output/mdd_iccs_v3.csv'))
+
+# #Demographic information
+dm <- read_csv(paste0(rootdir,"references/rest_paths_no_dates_race.csv"))
+
+source(paste0(rootdir, "markdown/scripts/plots.R"))
+
+
+```
+
+```{r filtering, echo=FALSE, cache=TRUE}
+all_subs <- merge(all_subs_unfiltered,
+                  dm[,c("subject","session","p_demo_screen_background_race",
+                        "p_demo_screen_background_hispanic")], 
+                  by=c("subject","session"),all.x=TRUE)
+
+#Cleaning up session data
+all_subs$old_sess <- all_subs$session
+all_subs$session[grepl("v1",all_subs$session)] <- "v1"
+all_subs$session[grepl("v4",all_subs$session)] <- "v4"
+all_subs$session[grepl("v2",all_subs$session)] <- "v2"
+all_subs$session[grepl("v3",all_subs$session)] <- "v3"
+schaefersc_connectomes$session[grepl("v1",schaefersc_connectomes$session)] <- "v1"
+schaefersc_connectomes$session[grepl("v4",schaefersc_connectomes$session)] <- "v4"
+schaefersc_connectomes$session[grepl("v2",schaefersc_connectomes$session)] <- "v2"
+schaefersc_connectomes$session[grepl("v3",schaefersc_connectomes$session)] <- "v3"
+basc_connectomes$session[grepl("v1",basc_connectomes$session)] <- "v1"
+basc_connectomes$session[grepl("v4",basc_connectomes$session)] <- "v4"
+basc_connectomes$session[grepl("v2",basc_connectomes$session)] <- "v2"
+basc_connectomes$session[grepl("v3",basc_connectomes$session)] <- "v3"
+
+#Filter to subjects with baseline and 1y
+all_subs_v2 <- all_subs %>% filter(!grepl("o|i", session)) %>% 
+  filter(grepl("v1|v2", session)) %>% 
+  group_by(subject) %>% 
+  filter(length(session) == 2) %>% 
+  mutate(med_change = rowSums(across(antidepressants:no_meds)))  %>% 
+  filter(length(unique(med_change)) == 1) %>% 
+  filter(length(unique(group)) == 1)
+
+# Try filter group length instead of change_status
+# all_subs <- all_subs %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% filter(length(unique(group)) == 1) %>% ungroup()
+
+all_subs <- merge(all_subs, tanner, by.x = c("subject","session"), by.y = c("SDAN", "Task_Visit_Type"), all.x = T)
+
+#Anyone who became an MDD at 1y is labeled MDD
+change_status <- all_subs %>% group_by(subject) %>% filter(length(unique(group)) > 1)
+for (i in unique(change_status$subject)){
+  all_subs[all_subs$subject == i,]$group <- "MDD"
+}
+
+all_tomes <- schaefersc_connectomes %>% filter(grepl("v1|v4", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+# all_tomes_v2 <- all_connectomes %>% filter(grepl("v1|v2", session)) %>% group_by(subject) %>% filter(length(session) == 2) %>% ungroup()
+
+mdd <- all_subs %>% filter(group == "MDD")
+hv <- all_subs %>% filter(group == "HV")
+
+mdd_v2 <- all_subs_v2 %>% filter(group == "MDD")
+
+# mdd_tomes <- merge(mdd, all_tomes, by=c('subject','session'),all.x = TRUE)
+hv_tomes <- merge(hv, all_tomes, by=c('subject','session'),all.x = TRUE)
+mdd_tomes <- merge(mdd_v2_medcontrol, all_tomes, by=c('subject','session'),all.x = TRUE)
+
+
+all_subs_v1 <- filter(all_subs, grepl("v1",session))
+mdd_v1 <- filter(mdd, grepl("v1",session))
+hv_v1 <- filter(hv, grepl("v1",session))
+# mdd_v2 <- filter(all_subs_v2, grepl("v1",session))
+
+nsubs <- dim(all_subs_v1)[1]
+nsubs_mdd <- dim(mdd_v1)[1]
+nsubs_hv <- dim(hv_v1)[1]
+
+edgenames <- colnames(select(all_tomes, -c(1:2)))
+```
+
+Filtering from `r length(unique(all_subs_unfiltered$subject))` subjects with `r dim(all_connectomes)[1]` scans. `r length(unique(all_subs$subject))` subjects have baseline and 1 year timepoint scans. `r dim(mdd_v1)[1]` participants are depressed (including `r length(unique(change_status$subject))` participants who received a diagnosis between scans) and `r dim(hv_v1)[1]` are healthy volunteers (HVs). F/M for all participants: `r table(all_subs_v1$sex)`. F/M for MDD participants: `r table(mdd_v1$sex)`.
+
+```{r ICC, cache=TRUE}
+
+icc.data.mdd.sc <- read_csv(paste0(rootdir, "data/output/mdd_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
+icc.data.hv.sc <- read_csv(paste0(rootdir, "data/output/hv_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
+icc.data.all.sc <- read_csv(paste0(rootdir, "data/output/all_icc_boots_schaefersc.csv"), 
+                     show_col_types = F)
+
+ICC.21.mdd.sc <- icc.data.mdd.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
+
+ICC.21.hv.sc <- icc.data.hv.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
+
+ICC.21.all.sc <- icc.data.all.sc %>% group_by(type) %>% summarise(ICC = mean(ICC), 
+                                                    upper_CI = mean(`10%`), 
+                                                    lower_CI = mean(`90%`))
+
+
+
+
+
+### Not used
+# #Assign group labels
+# mdd_concat_iccs$group <- "MDD"
+# hv_concat_iccs$group <- "HV"
+# 
+# iccs_v2_mean <- mean(mdd_iccs_v2$ICC)
+# iccs_v3_mean <- mean(mdd_iccs_v3$ICC)
+# 
+# #Combine mdd and hv ICCs
+# group_iccs <- rbind(mdd_concat_iccs, hv_concat_iccs)
+# 
+# group_iccs_means <- group_iccs %>% group_by(measure, group) %>% dplyr::summarise(ICC = mean(ICC))
+# 
+# group_iccs_means_wide <- pivot_wider(group_iccs_means, names_from = group, values_from = ICC)
+# group_iccs_means$group <- as.factor(group_iccs_means$group)
+# 
+# #Get ICCs by edge
+# group_iccs_by_measure <- pivot_wider(group_iccs, names_from = measure)
+# 
+# #ICCs run with all subjects
+# icc_summ_all_means <- all_concat_iccs %>% group_by(measure) %>% dplyr::summarise(mean_ICC = mean(icc_mean)) %>% pivot_wider(names_from = measure,values_from = mean_ICC)
+# all_mean <- mean(all_concat_iccs$icc_mean)
+# 
+# mdd_concat_iccs$contrasts <- mdd_concat_iccs$ICC - hv_concat_iccs$ICC
+# icc_contrasts <- mdd_concat_iccs[order(mdd_concat_iccs$contrasts),]
+# 
+# #Data for confidence intervals, this probably makes the above code unnecessary
+# bootstrapped_icc_data <- read_csv(paste0(rootdir,"data/output/bootstrapped_icc_data.csv"))
+# mdd_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_icc_means, c(.05, .95))
+# hv_icc_quantiles <- quantile(bootstrapped_icc_data$hv_icc_means, c(.05, .95))
+# mdd_v2_icc_quantiles <- quantile(bootstrapped_icc_data$mdd_v2_icc_means, c(.05, .95))
+
+```
+
+``` {r fingerprinting, cache=TRUE}
+#Create session matrices for fingerprinting
+ses1_all <- as.matrix(all_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(-c(1:2)))
+ses2_all <- as.matrix(all_tomes %>% filter(grepl("v4", session)) %>% ungroup() %>% select(-c(1:2)))
+ses1_mdd <- as.matrix(mdd_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(-c("subject":"s_tanner_pubic")))
+ses2_mdd <- as.matrix(mdd_tomes %>% filter(grepl("v4", session)) %>% ungroup() %>% select(-c("subject":"s_tanner_pubic")))
+ses1_hv <- as.matrix(hv_tomes %>% filter(grepl("v1", session)) %>% ungroup() %>% select(-c("subject":"s_tanner_pubic")))
+ses2_hv <- as.matrix(hv_tomes %>% filter(grepl("v4", session)) %>% ungroup() %>% select(-c("subject":"s_tanner_pubic")))
+
+#Outputs for differential power and group consistency analysis using code from Horien et al. 
+write.table(ses1_all, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses1_all.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+write.table(ses2_all, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses2_all.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+write.table(ses1_mdd, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses1_mdd.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+write.table(ses2_mdd, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses2_mdd.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+write.table(ses1_hv, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses1_hv.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+write.table(ses2_hv, paste0(rootdir,'ID_scripts/edge_code/data/basc_v4/ses2_hv.csv'), col.names=FALSE, row.names=FALSE,sep=',')
+
+source(paste0(rootdir,'markdown/scripts/get_FI.R'))
+
+#Fingerprinting function
+FI_all <- get_FI(ses1_all,ses2_all)
+FI_mdd <- get_FI(ses1_mdd,ses2_mdd)
+FI_hv <- get_FI(ses1_hv,ses2_hv)
+
+
+#Using permutation values from Horien et al. ID code with 1000 perms
+# FI_all_null <- 0.0115
+# FI_mdd_null <- 0.0174
+# FI_hv_null <- 0.0314
+# 
+# #Poisson test should be the same as testing null, use number of matches for first parameter
+# poisson.test(floor(mean(FI_all)*nsubs), alternative = "greater")
+# poisson.test(floor(mean(FI_mdd)*nsubs_mdd), alternative = "greater")
+# poisson.test(floor(mean(FI_hv)*nsubs_hv), alternative = "greater")
+# 
+# #For chi square
+# FI_df <- data.frame(rbind(round(nsubs_mdd*mean(FI_mdd)),rbind(round(nsubs_hv*mean(FI_hv)))))
+# colnames(FI_df) <- "matched"
+# FI_df$unmatched <- rbind(nsubs_mdd - FI_df$matched[1], nsubs_hv - FI_df$matched[2])
+# rownames(FI_df) <- c("mdd","hv")
+# 
+# chi <- chisq.test(FI_df,correct=FALSE)
+# 
+# #Data for bootstrapped fingerprinting values from Horien et al 2018
+# bootstrapped_FI_MDD <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_MDD.csv"),col_names = "FI")
+# bootstrapped_FI_HV <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_HV.csv"),col_names = "FI")
+# bootstrapped_FI_ALL <- read_csv(paste0(rootdir,"data/output/bootstrapped_FI_ALL.csv"),col_names = "FI")
+```
+
+
+```{r discr, cache=TRUE}
+
+source(paste0(rootdir,"markdown/scripts/get_DiscrBoot.R"))
+
+
+discr_boot_f <- function(data,nboot){
+  pb <- txtProgressBar(min = 1, max = nboot, style = 3)
+  discr_bootlist <- 1:nboot
+  for(i in 1:nboot){
+    discr_boot <- get_DiscrBoot(all_tomes)
+    discr_bootlist[i] <- discr.stat(select(discr_boot,-c(1:2)), 
+                                    discr_boot$subject)$discr
+    setTxtProgressBar(pb, i)
+  }
+  close(pb)
+  return(discr_bootlist)
+}
+
+#Comment these after the first time to avoid rerunning
+discr_all_boot <- discr_boot_f(all_tomes,1000)
+write.csv(discr_all_boot,paste0(rootdir,"data/output/discr_all_boot.csv"),row.names = FALSE)
+discr_mdd_boot <- discr_boot_f(mdd_tomes,1000)
+write.csv(discr_mdd_boot,paste0(rootdir,"data/output/discr_mdd_boot.csv"),row.names = FALSE)
+discr_hv_boot <- discr_boot_f(hv_tomes,1000)
+write.csv(discr_hv_boot,paste0(rootdir,"data/output/discr_hv_boot.csv"),row.names = FALSE)
+
+#Uncomment these after the first time to load bootstrapped discriminability
+# discr_all_boot <- read.csv(paste0(rootdir,"data/output/discr_all_boot.csv"))$x
+# discr_mdd_boot <- read.csv(paste0(rootdir,"data/output/discr_mdd_boot.csv"))$x
+# discr_hv_boot <- read.csv(paste0(rootdir,"data/output/discr_hv_boot.csv"))$x
+
+discr <- discr.test.one_sample(select(all_tomes, c("1_0":"121_120")), all_tomes$subject)
+
+discr_mdd <- discr.test.one_sample(select(mdd_tomes, c("1_0":"121_120")), mdd_tomes$subject)
+
+discr_hv <- discr.test.one_sample(select(hv_tomes, c("1_0":"121_120")), hv_tomes$subject)
+
+```
+
+```{r effect-size, cache=TRUE}
+
+source(paste0(rootdir,'markdown/scripts/get_cohens_d.R'))
+
+#Get effect sizes using the average of both sessions
+ses_mean_mdd <- (ses2_mdd+ses1_mdd)/2
+ses_mean_hv <- (ses2_hv + ses1_hv)/2
+cohens_d <- 1:dim(ses_mean_mdd)[2]
+
+#get vector of edge-level effect sizes
+for (measure in edgenames){
+  cohens_d <- c(cohens_d, get_cohens_d(ses_mean_mdd, ses_mean_hv, measure))
+}
+# write.table(cohens_d, paste0(rootdir, 'data/output/cohens_d_schaefersc_v4.csv'))
+
+
+#Getting this from HPC - zscored discriminability with each edge removed
+edge_discriminability <- as.vector(read_csv(paste0(rootdir,"data/output/edge_ranklist.csv"))$zscore)
+
+icc_summ_all_means <- icc_summ_all_means[,edgenames]
+icc <- as.vector(t(icc_summ_all_means))
+
+#Differential power and group consistency from Horien et al. code
+dp <- as.vector(t(read_csv(paste0(rootdir,'data/processed/connectivity_data/DP_edges_all_valmat_v21_1.csv'),col_names=FALSE)))
+gc <- as.vector(t(read_csv(paste0(rootdir,'data/processed/connectivity_data/gr_edges_all_valmat_v21_1.csv'),col_names=FALSE)))
+
+
+effect_size_db <- data.frame(cohens_d)
+effect_size_db$ICC <- icc
+effect_size_db$group_consistency <- gc
+effect_size_db$differential_power <- dp
+effect_size_db$edge_discriminability <- edge_discriminability
+
+attr(effect_size_db$cohens_d, "label") <- "Between-Group Cohen's d"
+attr(effect_size_db$group_consistency, "label") <- "Group Consistency"
+attr(effect_size_db$differential_power, "label") <- "Differential Power"
+attr(effect_size_db$edge_discriminability, "label") <- "Edge Discriminability"
+
+#SI table 2
+tab_corr(effect_size_db, fade.ns=F,
+  corr.method = "pearson",
+  triangle = "l",
+  use.viewer = TRUE,
+  file = paste0(rootdir,"figures/effect_size_pearson_table.doc"))
+
+tab_corr(effect_size_db, fade.ns=F,
+  corr.method = "spearman",
+  triangle = "l",
+  use.viewer = TRUE,
+  file = paste0(rootdir,"figures/effect_size_spearman_table.doc"))
+
+#Figure 4
+ggplot(effect_size_db, aes(x=cohens_d, y=ICC)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method=lm , color="blue", fill="#69b3a2", se=TRUE) + 
+  xlab("MDD - HV Cohen's d") + ylab("Edge-level ICC") +
+  theme(text = element_text(size=20))
+ggplot(effect_size_db, aes(x=cohens_d, y=group_consistency)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method=lm , color="blue", fill="#69b3a2", se=TRUE) + 
+  xlab("MDD - HV Cohen's d") + ylab("Group Consistency") +
+  theme(text = element_text(size=20))
+ggplot(effect_size_db, aes(x=cohens_d, y=differential_power)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method=lm , color="blue", fill="#69b3a2", se=TRUE) + 
+  xlab("MDD - HV Cohen's d") + ylab("Differential Power") +
+  theme(text = element_text(size=20))
+ggplot(effect_size_db, aes(x=cohens_d, y=edge_discriminability)) +
+  geom_point(alpha = .2) +
+  geom_smooth(method=lm , color="blue", fill="#69b3a2", se=TRUE) +
+  xlab("MDD - HV Cohen's d") + ylab("Edge Discriminability") +
+  theme(text = element_text(size=20))
+
+
+```
+
+```{r behavior}
+#SI Figure 3, Table 3
+all_subs_measures <- all_subs %>% 
+  mutate(psych_meds = rowSums(select(all_subs, antidepressants:ADHD_medication))) %>% 
+  group_by(subject) %>% 
+  mutate(mean_mfq = mean(s_mfq_tot), 
+         mean_shaps = mean(s_shaps_tot),
+         mean_ari1w = mean(s_ari1w_tot),
+         mean_scared = mean(s_scared_tot),
+         mean_motion = mean(motion_per_tr),
+         mean_max_fd = mean(max_fd),
+         mean_age = mean(age),
+         mean_psychmeds = mean(psych_meds),
+         mean_othermeds = mean(other),
+         mean_tannergrowth = mean(s_tanner_growth),
+         mean_tannerpubic = mean(s_tanner_pubic),
+         delta_mfq = s_mfq_tot - lag(s_mfq_tot, default = first(s_mfq_tot)),
+         delta_shaps = s_shaps_tot - lag(s_shaps_tot, default = first(s_shaps_tot)),
+         delta_ari1w = s_ari1w_tot - lag(s_ari1w_tot, default = first(s_ari1w_tot)),
+         delta_scared = s_scared_tot - lag(s_scared_tot, default = first(s_scared_tot)),
+         delta_psychmeds = psych_meds - lag(psych_meds, default = first(psych_meds)),
+         delta_othermeds = abs(other - lag(other, default = first(other))),
+         delta_tannergrowth = 
+           abs(s_tanner_growth - lag(s_tanner_growth, default = first(s_tanner_growth))),
+         delta_tannerpubic = 
+           abs(s_tanner_pubic - lag(s_tanner_pubic, default = first(s_tanner_pubic)))) %>% 
+  filter(session == "v4")
+
+
+# ICC - within subject variance
+within_var_mat <- matrix(mapply(function(x,y) sd(c(x,y)),ses1_all, ses2_all), ncol=ncol(ses1_all))
+all_subs_measures$within_var <- apply(within_var_mat, 1, mean)
+
+
+# Fingerprinting
+all_subs_measures$FI_continuous <- get_FI(ses1_all, ses2_all, continuous = T) 
+
+#Subject discriminability
+source(paste0(rootdir,'markdown/scripts/get_dist_ranklist.R'))
+all_subs_measures$dist_rank <- get_dist_ranklist(select(all_tomes, -c(1:2)))
+all_subs_measures$dist_rank <- 1:dim(all_subs_measures)[1]
+
+all_subs_measures_df <- all_subs_measures[c("within_var","FI_continuous","dist_rank",
+                                            "mean_mfq", "mean_shaps", "mean_ari1w", 
+                                            "mean_scared", "mean_motion", "mean_max_fd", 
+                                            "mean_age", "mean_psychmeds","mean_othermeds",
+                                            "mean_tannergrowth", "mean_tannerpubic",
+                                            "delta_mfq", "delta_shaps", "delta_ari1w", 
+                                            "delta_scared", "delta_psychmeds", 
+                                            "delta_othermeds", "delta_tannergrowth", 
+                                            "delta_tannerpubic")]
+
+attr(all_subs_measures_df$within_var, "label") <- "Within-Subject Variance"
+attr(all_subs_measures_df$FI_continuous, "label") <- "Fingerprinting"
+attr(all_subs_measures_df$dist_rank, "label") <- "Participant Discriminability"
+attr(all_subs_measures_df$mean_mfq, "label") <- "MFQ (mean)"
+attr(all_subs_measures_df$mean_shaps, "label") <- "SHAPS (mean)"
+attr(all_subs_measures_df$mean_ari1w, "label") <- "ARI (mean)"
+attr(all_subs_measures_df$mean_scared, "label") <- "SCARED (mean)"
+attr(all_subs_measures_df$mean_motion, "label") <- "Motion"
+attr(all_subs_measures_df$mean_max_fd, "label") <- "Max Framewise Displacement"
+attr(all_subs_measures_df$mean_age, "label") <- "Age"
+attr(all_subs_measures_df$mean_psychmeds, "label") <- "Meds-Psychoactive (mean)"
+attr(all_subs_measures_df$mean_othermeds, "label") <- "Meds-Other (mean)"
+attr(all_subs_measures_df$delta_mfq, "label") <- "MFQ (change)"
+attr(all_subs_measures_df$delta_shaps, "label") <- "SHAPS (change)"
+attr(all_subs_measures_df$delta_ari1w, "label") <- "ARI (change)"
+attr(all_subs_measures_df$delta_scared, "label") <- "SCARED (change)"
+attr(all_subs_measures_df$delta_psychmeds, "label") <- "Meds-Psychoactive (change)"
+attr(all_subs_measures_df$delta_othermeds, "label") <- "Meds-Other (change)"
+
+
+#SI table 3
+tab_corr(all_subs_measures_df, fade.ns=F,
+  corr.method = "spearman",
+  triangle = "l",
+  use.viewer = TRUE,
+  file = paste0(rootdir,"figures/behavior_spearman_table.doc"))
+
+tab_corr(all_subs_measures_df, fade.ns=F,
+  corr.method = "pearson",
+  triangle = "l",
+  use.viewer = TRUE,
+  file = paste0(rootdir,"figures/behavior_pearson_table.doc"))
+
+#SI Figure 3
+cormat <- rcorr(as.matrix(all_subs_measures_df,type="spearman"))
+cormat_r <- cormat$r[c("within_var","FI_continuous","dist_rank"),
+                     c("mean_mfq", "mean_shaps", "mean_ari1w", "mean_scared", 
+                       "mean_motion", "mean_max_fd", "mean_age",  
+                       "mean_psychmeds","mean_othermeds", "delta_mfq", "delta_shaps", 
+                       "delta_ari1w", "delta_scared", "delta_psychmeds", 
+                       "delta_othermeds")]
+rownames(cormat_r) <- c("Within-Subject Variance", "Fingerprinting", "Within-Subject Distance")
+
+cormat_p <- cormat$P[c("within_var","FI_continuous","dist_rank"),
+                     c("mean_mfq","mean_shaps", "mean_ari1w", "mean_scared", 
+                       "mean_motion", "mean_max_fd", "mean_age", 
+                       "mean_psychmeds","mean_othermeds","delta_mfq", "delta_shaps", 
+                       "delta_ari1w", "delta_scared", "delta_psychmeds", 
+                       "delta_othermeds")]
+
+corrplot(cormat_r,method="color")
+
+```
+
+```{r figures}
+all_stats <- data.frame(cbind(rbind(all_mean,
+                                    mean(mdd_concat_iccs$ICC),
+                                    mean(hv_concat_iccs$ICC)),
+                              rbind(mean(FI_all),mean(FI_mdd),mean(FI_hv)), 
+                              rbind(FI_all_null,FI_mdd_null,FI_hv_null),
+                              rbind(discr$stat,discr_mdd$stat,discr_hv$stat),
+                              rbind(mean(discr$null),
+                                    mean(discr_mdd$null),
+                                    mean(discr_hv$null)),                     
+                              rbind(quantile(bootstrapped_FI_ALL$FI,.05),
+                                    quantile(bootstrapped_FI_MDD$FI, .05), 
+                                    quantile(bootstrapped_FI_HV$FI, .05)),
+                              rbind(quantile(bootstrapped_FI_ALL$FI,.95),
+                                    quantile(bootstrapped_FI_MDD$FI, .95), 
+                                    quantile(bootstrapped_FI_HV$FI, .95)),
+                              rbind(quantile(discr_all_boot,.05),
+                                    quantile(discr_hv_boot, .05), 
+                                    quantile(discr_mdd_boot, .05)),
+                              rbind(quantile(discr_all_boot,.95),
+                                    quantile(discr_hv_boot, .95), 
+                                    quantile(discr_mdd_boot, .95))),
+                        row.names = c('All','MDD','HV'))
+colnames(all_stats) <- c('ICC','FI','FI_null','Discr',
+                         'Discr_null','FI_lower','FI_upper','D_lower','D_upper')
+all_stats$Chance_d <- c("Chance Discriminability","Chance Discriminability","Chance Discriminability")
+all_stats$Chance_fi <- c("Chance Fingerprinting","Chance Fingerprinting","Chance Fingerprinting")
+
+#Figure 2A Fingerpinting Bar
+ggplot(all_stats,aes(x=rownames(all_stats),y=FI,fill=rownames(all_stats)))+
+  geom_bar(stat="identity", width=0.5)  +
+  geom_errorbar(aes(ymin=FI_lower, ymax=FI_upper, width=.2),
+                 position=position_dodge(.9)) + 
+  geom_segment(aes(x=c(.75,2.75,1.75),y=FI_null,xend=c(1.25,3.25,2.25),yend = FI_null, linetype=Chance_fi),size=1) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) + 
+  scale_linetype_manual("Chance",values=c("Chance Fingerprinting"=2)) +
+  guides(fill="none", linetype=guide_legend(title=NULL,keywidth = 3, keyheight = 1)) + 
+  ylab("Fingerprinting Index")+ xlab("Condition") + 
+  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
+  theme_classic() + theme(text = element_text(size=20)) + 
+  theme(legend.justification=c(1,1),legend.position=c(1,1),
+        text = element_text(size=20))
+
+#Figure 2B Discriminability Bar
+ggplot(all_stats,aes(x=rownames(all_stats),y=Discr,fill=rownames(all_stats)))+ 
+  geom_bar(stat="identity", width=0.5)+coord_cartesian(ylim=c(.49,1.05)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) + 
+  geom_errorbar(aes(ymin=D_lower, ymax=D_upper, width=.2),
+                 position=position_dodge(.9)) + 
+  geom_segment(aes(x=c(.75,2.75,1.75),
+                   y=Discr_null,xend=c(1.25,3.25,2.25),
+                   yend = Discr_null,linetype=Chance_d),size=1) + 
+  scale_linetype_manual("Chance",values=c("Chance Discriminability"=2)) + 
+  guides(fill="none", linetype=guide_legend(title=NULL,keywidth = 3, keyheight = 1)) + 
+  ylab("Discriminability")+ xlab("Condition") + 
+  scale_color_manual(values = c("#d45757", "#FECDAA","#6785E3"),aesthetics = "fill") + 
+  theme_classic() + 
+  theme(legend.justification=c(1,1),legend.position=c(1,1),
+        text = element_text(size=20))
+
+
+#SI Figure 1 df
+icc_df_for_violin <- pivot_longer(bootstrapped_icc_data,cols=c(1:3),names_to = "Condition",
+                                  values_to = "ICC", names_pattern = "(.*)_icc_means")
+icc_df_for_violin[icc_df_for_violin == "mdd"] <- "MDD - 1 Year"
+icc_df_for_violin[icc_df_for_violin == "hv"] <- "HV - 1 Year"
+icc_df_for_violin[icc_df_for_violin == "mdd_v2"] <- "MDD - 4 Months"
+
+
+ggplot(icc_df_for_violin, aes(x=Condition, y=ICC, fill=Condition)) + 
+  geom_violin(trim = FALSE) + 
+  geom_boxplot(width=0.1,fill="white",outlier.shape = NA) +
+  scale_color_manual(values = c("#FECDAA", "#CACBE4","#6785E3"),aesthetics = "fill") +
+  xlab("Condition") + ylab("Mean ICC") +
+  theme_bw() + theme(legend.position="none", text = element_text(size=20)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1))
+
+```
+
+```{r demographics}
+sub_dm <- merge(all_subs, dm[,c("subject","session","p_demo_screen_background_race")], by=c("subject","session"),all.x=TRUE)
+```
